@@ -68,6 +68,206 @@
   function loadBest() { best = 0; try { best = parseInt(localStorage.getItem(bestKey()) || '0', 10) || 0; } catch (e) {} }
   loadBest();
   var vacOn = false, vacAt = 0, cheat = { god: false, wpn: false }, codeMsg = '', codeMsgT = 0, codeRects = [], wallet = 0, runCoins = 0, coins = [], gems = 0, runGems = 0, gemDrops = [], shopSel = 0, shopPrev = 'menu', shopRects = [], shopMsg = '', shopMsgT = 0;
+
+  // ---------- Misiones diarias y logros ----------
+  var MISSION_DEFS = [
+    { id: 'kills_rayo',   desc: 'Mata 50 enemigos con Rayo',        type: 'kills_el',  el: 3, target: 50,  rCoins: 80,  rGems: 0 },
+    { id: 'kills_plasma', desc: 'Mata 30 enemigos con Plasma',       type: 'kills_el',  el: 0, target: 30,  rCoins: 60,  rGems: 0 },
+    { id: 'kills_fuego',  desc: 'Mata 40 enemigos con Fuego',        type: 'kills_el',  el: 1, target: 40,  rCoins: 70,  rGems: 0 },
+    { id: 'kills_hielo',  desc: 'Mata 35 enemigos con Hielo',        type: 'kills_el',  el: 2, target: 35,  rCoins: 65,  rGems: 0 },
+    { id: 'kills_veneno', desc: 'Mata 30 enemigos con Veneno',       type: 'kills_el',  el: 4, target: 30,  rCoins: 60,  rGems: 0 },
+    { id: 'kills_vacio',  desc: 'Mata 25 enemigos con Vacío',        type: 'kills_el',  el: 5, target: 25,  rCoins: 55,  rGems: 0 },
+    { id: 'kills_luz',    desc: 'Mata 40 enemigos con Luz',          type: 'kills_el',  el: 6, target: 40,  rCoins: 70,  rGems: 0 },
+    { id: 'wave_clean',   desc: 'Supera una oleada sin que te golpeen', type: 'wave_clean', target: 1, rCoins: 100, rGems: 0 },
+    { id: 'kill_boss',    desc: 'Derrota a un jefe',                  type: 'boss_kill',  target: 1,  rCoins: 50,  rGems: 2 },
+    { id: 'coins_run',    desc: 'Recoge 200 monedas en una partida',  type: 'coins_run',  target: 200, rCoins: 100, rGems: 0 },
+    { id: 'kills_total',  desc: 'Mata 100 enemigos en una partida',  type: 'kills_run',  target: 100, rCoins: 120, rGems: 0 },
+    { id: 'waves_10',     desc: 'Completa 10 oleadas seguidas',       type: 'waves_run',  target: 10,  rCoins: 150, rGems: 0 },
+    { id: 'kill_boss2',   desc: 'Derrota 2 jefes en un día',         type: 'boss_day',   target: 2,  rCoins: 80,  rGems: 3 },
+    { id: 'gems_run',     desc: 'Recoge 5 diamantes en una partida', type: 'gems_run',   target: 5,  rCoins: 0,   rGems: 5 }
+  ];
+  var ACHIEV_DEFS = [
+    { id: 'first_boss',   desc: 'Derrota tu primer jefe',            type: 'boss_total',  target: 1,   rCoins: 0,   rGems: 3 },
+    { id: 'boss10',       desc: 'Derrota 10 jefes en total',         type: 'boss_total',  target: 10,  rCoins: 200, rGems: 0 },
+    { id: 'boss50',       desc: 'Derrota 50 jefes en total',         type: 'boss_total',  target: 50,  rCoins: 0,   rGems: 15 },
+    { id: 'kills500',     desc: 'Elimina 500 enemigos en total',     type: 'kills_total', target: 500, rCoins: 150, rGems: 0 },
+    { id: 'kills5000',    desc: 'Elimina 5000 enemigos en total',    type: 'kills_total', target: 5000,rCoins: 0,   rGems: 10 },
+    { id: 'lv10',         desc: 'Alcanza el nivel 10',               type: 'level_max',   target: 10,  rCoins: 100, rGems: 0 },
+    { id: 'lv25',         desc: 'Alcanza el nivel 25',               type: 'level_max',   target: 25,  rCoins: 0,   rGems: 5 },
+    { id: 'lv50',         desc: 'Completa los 50 niveles',           type: 'level_max',   target: 50,  rCoins: 500, rGems: 20 },
+    { id: 'gems50',       desc: 'Acumula 50 diamantes',              type: 'gems_wallet', target: 50,  rCoins: 0,   rGems: 5 },
+    { id: 'ships5',       desc: 'Desbloquea 5 naves',                type: 'ships_owned', target: 5,   rCoins: 80,  rGems: 0 },
+    { id: 'daily3',       desc: 'Completa 3 misiones diarias',       type: 'daily_done',  target: 3,   rCoins: 0,   rGems: 2 }
+  ];
+  // Estado de misiones y logros
+  var missions = [];    // [{defId, progress, done, claimed}]
+  var achiev = {};      // {id: {progress, done, claimed}}
+  var missionDate = ''; // fecha ISO actual
+  // Contadores de sesión para misiones
+  var msnRunKills = 0, msnRunKillsEl = [0,0,0,0,0,0,0], msnRunCoins = 0, msnRunGems = 0, msnRunWaves = 0;
+  var msnWaveClean = false; // sin golpes en la oleada actual
+  var msnDayBoss = 0;      // jefes derrotados hoy
+  // Contadores globales (persistidos)
+  var statBossTotal = 0, statKillsTotal = 0;
+  var msnPendingToast = null; // {text, col} notificación pendiente
+  var msnToastT = 0;
+  function todayISO() { var d = new Date(); return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); }
+  function pickDailyMissions() {
+    // Elige 3 misiones pseudo-aleatorias basadas en la fecha
+    var today = todayISO();
+    var seed = 0; for (var ci = 0; ci < today.length; ci++) seed = (seed * 31 + today.charCodeAt(ci)) & 0xffff;
+    var pool = MISSION_DEFS.slice(), picked = [], i, idx;
+    for (i = 0; i < 3 && pool.length > 0; i++) {
+      seed = (seed * 1664525 + 1013904223) & 0xffffffff;
+      idx = Math.abs(seed) % pool.length;
+      picked.push(pool[idx]);
+      pool.splice(idx, 1);
+    }
+    return picked;
+  }
+  function loadMissions() {
+    var today = todayISO();
+    var raw = null;
+    try { raw = JSON.parse(localStorage.getItem('nd_missions') || 'null'); } catch(e) {}
+    if (raw && raw.date === today) {
+      missions = raw.missions || [];
+      msnDayBoss = raw.dayBoss || 0;
+    } else {
+      // Nuevo día: genera nuevas misiones
+      var defs = pickDailyMissions();
+      missions = defs.map(function(d) { return { defId: d.id, progress: 0, done: false, claimed: false }; });
+      msnDayBoss = 0;
+    }
+    missionDate = today;
+  }
+  function saveMissions() {
+    try {
+      localStorage.setItem('nd_missions', JSON.stringify({ date: missionDate, missions: missions, dayBoss: msnDayBoss }));
+      localStorage.setItem('nd_achiev', JSON.stringify(achiev));
+      localStorage.setItem('nd_stats', JSON.stringify({ bossTotal: statBossTotal, killsTotal: statKillsTotal }));
+    } catch(e) {}
+  }
+  function loadAchiev() {
+    try {
+      var a = JSON.parse(localStorage.getItem('nd_achiev') || '{}');
+      ACHIEV_DEFS.forEach(function(D) { if (a[D.id]) achiev[D.id] = a[D.id]; else achiev[D.id] = { progress: 0, done: false, claimed: false }; });
+      var st = JSON.parse(localStorage.getItem('nd_stats') || '{}');
+      statBossTotal = st.bossTotal || 0;
+      statKillsTotal = st.killsTotal || 0;
+    } catch(e) { ACHIEV_DEFS.forEach(function(D) { achiev[D.id] = { progress: 0, done: false, claimed: false }; }); }
+  }
+  function msnToast(txt, col) { msnPendingToast = { text: txt, col: col || '#7dffa0' }; msnToastT = clock + 3; }
+  function claimMission(mIdx) {
+    var m = missions[mIdx]; if (!m || !m.done || m.claimed) return;
+    m.claimed = true;
+    var D = MISSION_DEFS.filter(function(d){ return d.id === m.defId; })[0];
+    if (!D) return;
+    if (D.rCoins) { wallet += D.rCoins; msnToast('+' + D.rCoins + ' ◉  ¡Misión completada!', '#ffd54a'); }
+    if (D.rGems)  { gems += D.rGems;   msnToast('+' + D.rGems  + ' ◆  ¡Misión completada!', '#7ff0ff'); }
+    if (!D.rCoins && !D.rGems) msnToast('¡Misión completada!', '#7dffa0');
+    // Logro "daily3"
+    var claimed3 = missions.filter(function(mx){ return mx.claimed; }).length;
+    updateAchiev('daily_done', claimed3);
+    saveMeta(); saveMissions(); powerSound();
+  }
+  function claimAchiev(aid) {
+    var a = achiev[aid]; if (!a || !a.done || a.claimed) return;
+    a.claimed = true;
+    var D = ACHIEV_DEFS.filter(function(d){ return d.id === aid; })[0];
+    if (!D) return;
+    if (D.rCoins) { wallet += D.rCoins; msnToast('+' + D.rCoins + ' ◉  ¡Logro!', '#ffd54a'); }
+    if (D.rGems)  { gems += D.rGems;   msnToast('+' + D.rGems  + ' ◆  ¡Logro!', '#7ff0ff'); }
+    if (!D.rCoins && !D.rGems) msnToast('¡Logro desbloqueado!', '#7dffa0');
+    saveMeta(); saveMissions(); powerSound();
+  }
+  function updateMission(type, value) {
+    missions.forEach(function(m, mIdx) {
+      if (m.done) return;
+      var D = MISSION_DEFS.filter(function(d){ return d.id === m.defId; })[0];
+      if (!D || D.type !== type) return;
+      if (type === 'kills_el') {
+        // value = element index
+        if (D.el !== value) return;
+      }
+      if (type === 'boss_day') { m.progress = msnDayBoss; }
+      else { m.progress = Math.min(D.target, m.progress + 1); }
+      if (m.progress >= D.target) {
+        m.done = true;
+        msnToast('¡Misión lista! Reclama en el mapa  (' + (D.rCoins ? '◉ '+D.rCoins : '') + (D.rGems ? ' ◆ '+D.rGems : '') + ')', '#ffe600');
+      }
+      saveMissions();
+    });
+  }
+  function updateAchiev(type, value) {
+    ACHIEV_DEFS.forEach(function(D) {
+      var a = achiev[D.id];
+      if (!a || a.done) return;
+      if (D.type !== type) return;
+      // Logros de nivel acumulado
+      if (type === 'level_max' || type === 'gems_wallet' || type === 'ships_owned' || type === 'daily_done') {
+        a.progress = value;
+      } else if (type === 'boss_total' || type === 'kills_total') {
+        a.progress = value;
+      } else {
+        a.progress = Math.min(D.target, a.progress + 1);
+      }
+      if (a.progress >= D.target && !a.done) {
+        a.done = true;
+        msnToast('¡Logro! ' + D.desc, '#c0ffc0');
+      }
+      saveMissions();
+    });
+  }
+  // Hook: llamar al inicio de cada oleada
+  function msnOnWaveStart() { msnWaveClean = true; msnRunWaves = 0; }
+  // Hook: llamar al final de una oleada (enemies === 0)
+  function msnOnWaveClear() {
+    msnRunWaves++;
+    if (msnWaveClean) { updateMission('wave_clean', 1); }
+    updateMission('waves_run', 1);
+  }
+  // Hook: jugador golpeado
+  function msnOnPlayerHit() { msnWaveClean = false; }
+  // Hook: enemigo muerto
+  function msnOnKill(enemy, owner) {
+    msnRunKills++;
+    statKillsTotal++;
+    var el = owner ? elOf(owner) : -1;
+    if (el >= 0) { msnRunKillsEl[el] = (msnRunKillsEl[el] || 0) + 1; updateMission('kills_el', el); }
+    updateMission('kills_run', 1);
+    updateAchiev('kills_total', statKillsTotal);
+    if (enemy.kind === 'boss') {
+      msnDayBoss++;
+      statBossTotal++;
+      updateMission('boss_kill', 1);
+      updateMission('boss_day', 0); // value not used, reads msnDayBoss
+      updateAchiev('boss_total', statBossTotal);
+    }
+    saveMissions();
+  }
+  // Hook: monedas recogidas
+  function msnOnCoins(n) {
+    msnRunCoins += n;
+    if (msnRunCoins >= 200) updateMission('coins_run', 1);
+  }
+  // Hook: gema recogida
+  function msnOnGem() {
+    msnRunGems++;
+    if (msnRunGems >= 5) updateMission('gems_run', 1);
+    updateAchiev('gems_wallet', gems);
+  }
+  // Hook: nivel desbloqueado
+  function msnOnProgUpdate() {
+    updateAchiev('level_max', prog);
+    updateAchiev('ships_owned', own.length);
+    saveMissions();
+  }
+  // Reiniciar contadores de sesión al inicio de partida
+  function msnResetRun() {
+    msnRunKills = 0; msnRunKillsEl = [0,0,0,0,0,0,0]; msnRunCoins = 0; msnRunGems = 0; msnRunWaves = 0; msnWaveClean = true;
+  }
+  loadAchiev();
+  loadMissions();
   var up = { sh: 0, rf: 0, c2: 0, life: 0, wpn: 0 };
   var UPG = [
     { k: 'sh', name: 'Escudo duradero', desc: '+2 s de escudo por nivel', max: 5, base: 40 },
@@ -553,6 +753,7 @@
 
   function startLevel(L, boss, lvl) {
     level = lvl || L; levelT = 2.2; clearing = false; clearT = 0; ft = 0;
+    msnOnWaveStart();
     if (L > 1 && anyAlive()) {
       for (var q = 0; q < players.length; q++) {
         var R = players[q];
@@ -593,14 +794,14 @@
 
   function startCamp() { level = camp.lv; startLevel(camp.lv + Math.floor((camp.wave - 1) / 3), false, camp.lv); }
   function start(lv) {
-    reset(); state = 'playing';
+    reset(); msnResetRun(); state = 'playing';
     if (numPlayers === 2) startLevel(1, false);
     else { camp = { lv: lv || mapSel || 1, wave: 1, boss: false }; startCamp(); }
     tone(440, 0.1, 'triangle', 0.07, 0); tone(660, 0.16, 'triangle', 0.07, 0.08);
   }
   function finishLevel() {
     var lv = camp.lv, bonus = 20 * lv, ts = totalScore();
-    if (lv >= prog && prog < MAXLV) prog = lv + 1;
+    if (lv >= prog && prog < MAXLV) { prog = lv + 1; msnOnProgUpdate(); }
     wallet += bonus; saveMeta();
     if (ts > best) { best = ts; try { localStorage.setItem(bestKey(), String(best)); } catch (e) {} }
     mapNote = '¡Nivel ' + lv + ' completado!  +' + bonus + ' monedas'; mapNoteT = clock + 5;
@@ -900,6 +1101,7 @@
     explode(e.x, e.y, s);
     explosionSound(s);
     (owner || players[0]).score += e.pts;
+    msnOnKill(e, owner || players[0]);
     dropCoins(e);
     if (e.kind === 'boss') {
       shake = 0.8; flash = 0.8;
@@ -928,6 +1130,7 @@
       return;
     }
     P.lives--;
+    msnOnPlayerHit();
     if (P.lives <= 0) {
       P.lives = 0; P.alive = false;
       if (!anyAlive()) { gameOver(P); return; }
@@ -1192,7 +1395,7 @@
         ddx = P.x - c.x; ddy = P.y - c.y;
         if (ddx * ddx + ddy * ddy < 22 * 22) { got = P; break; }
       }
-      if (got) { var v = got.c2T > 0 ? 2 : 1; wallet += v; runCoins += v; gotAny = true; coinSound(); coins.splice(i, 1); }
+      if (got) { var v = got.c2T > 0 ? 2 : 1; wallet += v; runCoins += v; gotAny = true; msnOnCoins(v); coinSound(); coins.splice(i, 1); }
       else if (c.y > H + 20) coins.splice(i, 1);
     }
     for (i = gemDrops.length - 1; i >= 0; i--) {
@@ -1212,12 +1415,13 @@
         ddx = P.x - g.x; ddy = P.y - g.y;
         if (ddx * ddx + ddy * ddy < 26 * 26) { gg = P; break; }
       }
-      if (gg) { gems++; runGems++; gotAny = true; gemSound(); sparksAt(g.x, g.y, 6, [140, 245, 255]); gemDrops.splice(i, 1); }
+      if (gg) { gems++; runGems++; gotAny = true; msnOnGem(); gemSound(); sparksAt(g.x, g.y, 6, [140, 245, 255]); gemDrops.splice(i, 1); }
       else if (g.y > H + 20) gemDrops.splice(i, 1);
     }
     if (gotAny) saveMeta();
 
     if (!clearing && enemies.length === 0) {
+      msnOnWaveClear();
       clearing = true; clearT = 2.2;
       curP.fin = numPlayers === 2 || !!curP.boss || !!(camp && (camp.boss || (camp.wave >= 10 && camp.lv % 5 !== 0)));
       if (curP.fin) { clearT = curP.boss ? 5.2 : 4.4; vacOn = true; vacAt = clock; }
@@ -2158,10 +2362,14 @@
     glow('#00f5ff', 16); text('MAPA DE NIVELES', W / 2, 46, Math.min(34, W / 11), '#ffffff'); noGlow();
     text('Desbloqueado: ' + prog + ' / ' + MAXLV, W / 2, 70, 14, '#9fb4ff');
     text('◉ ' + wallet, W - 16, 86, 15, '#ffd54a', 'right');
+    text('◆ ' + gems, W - 16, 104, 15, '#7ff0ff', 'right');
     ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1;
     ctx.strokeRect(W - 124, 12, 112, 30);
     text('VOLVER (ESC)', W - 68, 32, 13, '#ffffff');
     if (mapNoteT > clock) text(mapNote, W / 2, 98, 16, '#ffe600');
+
+    // Misiones diarias (panel lateral izquierdo)
+    drawMapMissions();
 
     // Pie
     var fg = ctx.createLinearGradient(0, H - 170, 0, H);
@@ -2174,6 +2382,97 @@
     ctx.strokeStyle = '#ffd54a'; ctx.lineWidth = 1.5; ctx.strokeRect(W / 2 - 100, H - 74, 200, 32);
     text('TIENDA (T)', W / 2, H - 53, 14, '#ffe27a');
     text('← → elegir  ·  ENTER/ESPACIO jugar  ·  clic en un nivel', W / 2, H - 18, 12, '#8a8aa8');
+  }
+
+  // ---------- Panel de misiones y logros en el mapa ----------
+  var msnPanelRects = [];
+  var msnShowAchiev = false; // false = misiones, true = logros
+  function drawMapMissions() {
+    var pw = Math.min(220, W * 0.34), px = 8, py = 118, ph = Math.min(H - 280, 340);
+    msnPanelRects = [];
+    // Fondo panel
+    ctx.fillStyle = 'rgba(0,0,0,0.62)'; ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = msnShowAchiev ? 'rgba(192,160,255,0.7)' : 'rgba(0,229,255,0.55)'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(px, py, pw, ph);
+    // Tabs
+    var tabW = pw / 2;
+    [['MISIONES', false], ['LOGROS', true]].forEach(function(tb, ti) {
+      var tx = px + ti * tabW, on = msnShowAchiev === tb[1];
+      msnPanelRects.push({ x: tx, y: py, w: tabW, h: 22, tab: tb[1] });
+      ctx.fillStyle = on ? 'rgba(0,229,255,0.18)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(tx, py, tabW, 22);
+      ctx.fillStyle = on ? '#00f5ff' : '#8a8aaa'; ctx.fillRect(tx, py + 19, tabW, 2);
+      text(tb[0], tx + tabW/2, py + 15, 11, on ? '#ffffff' : '#8a8aaa');
+    });
+    var iy = py + 28;
+    if (!msnShowAchiev) {
+      // Misiones diarias
+      text('HOY · ' + todayISO(), px + pw/2, iy, 10, '#8a8aaa');
+      iy += 14;
+      missions.forEach(function(m, mIdx) {
+        if (iy > py + ph - 8) return;
+        var D = MISSION_DEFS.filter(function(d){ return d.id === m.defId; })[0];
+        if (!D) return;
+        var rh = 46, bx = px + 6, bw = pw - 12;
+        var col = m.claimed ? '#4a8a4a' : (m.done ? '#ffe600' : 'rgba(255,255,255,0.06)');
+        ctx.fillStyle = col; ctx.fillRect(bx, iy, bw, rh);
+        ctx.strokeStyle = m.claimed ? '#4a8a4a' : (m.done ? '#ffe600' : 'rgba(255,255,255,0.18)'); ctx.lineWidth = 1; ctx.strokeRect(bx, iy, bw, rh);
+        // Descripción
+        var descW = bw - 8;
+        ctx.font = 'bold 10px "Segoe UI",Arial,sans-serif'; ctx.fillStyle = m.claimed ? '#90c090' : '#e0e0ff'; ctx.textAlign = 'left';
+        var words = D.desc.split(' '), line = '', diy = iy + 13;
+        for (var wi = 0; wi < words.length; wi++) {
+          var test = line ? line+' '+words[wi] : words[wi];
+          if (line && ctx.measureText(test).width > descW - 4) { ctx.fillText(line, bx + 4, diy); diy += 12; line = words[wi]; }
+          else line = test;
+        }
+        ctx.fillText(line, bx + 4, diy);
+        // Barra de progreso
+        var pby = iy + rh - 12, pbw = bw - 8;
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(bx + 4, pby, pbw, 5);
+        var pct = Math.min(1, D.target > 0 ? m.progress / D.target : (m.done ? 1 : 0));
+        ctx.fillStyle = m.claimed ? '#4adf4a' : (m.done ? '#ffe600' : '#00e5ff'); ctx.fillRect(bx + 4, pby, pbw * pct, 5);
+        text(m.progress + '/' + D.target, bx + 4 + pbw + 2, pby + 5, 9, '#8a8aaa', 'right');
+        // Recompensa
+        var rew = (D.rCoins ? '◉'+D.rCoins : '') + (D.rGems ? (D.rCoins?' ':'') + '◆'+D.rGems : '');
+        text(rew, bx + bw - 4, iy + 13, 10, '#ffd54a', 'right');
+        // Botón canjear
+        if (m.done && !m.claimed) {
+          msnPanelRects.push({ x: bx, y: iy, w: bw, h: rh, claim: mIdx });
+          text('CANJEAR ▶', px + pw/2, iy + rh/2 + 5, 11, '#ffe600');
+        } else if (m.claimed) {
+          text('✓ RECLAMADO', px + pw/2, iy + rh/2 + 5, 10, '#7dffa0');
+        }
+        iy += rh + 4;
+      });
+    } else {
+      // Logros
+      var claimable = 0;
+      ACHIEV_DEFS.forEach(function(D) { var a = achiev[D.id]; if (a && a.done && !a.claimed) claimable++; });
+      if (claimable > 0) text(claimable + ' logro(s) por reclamar!', px + pw/2, iy, 10, '#ffe600'); else text('Progresa para desbloquear', px + pw/2, iy, 10, '#8a8aaa');
+      iy += 14;
+      ACHIEV_DEFS.forEach(function(D) {
+        if (iy > py + ph - 8) return;
+        var a = achiev[D.id] || { progress: 0, done: false, claimed: false };
+        var rh = 40, bx = px + 6, bw = pw - 12;
+        ctx.fillStyle = a.claimed ? '#2a4a2a' : (a.done ? 'rgba(192,255,192,0.1)' : 'rgba(255,255,255,0.04)'); ctx.fillRect(bx, iy, bw, rh);
+        ctx.strokeStyle = a.claimed ? '#4a8a4a' : (a.done ? '#7dffa0' : 'rgba(255,255,255,0.12)'); ctx.lineWidth = 1; ctx.strokeRect(bx, iy, bw, rh);
+        ctx.font = 'bold 9px "Segoe UI",Arial,sans-serif'; ctx.fillStyle = a.claimed ? '#90c090' : '#d0d4f0'; ctx.textAlign = 'left';
+        ctx.fillText(D.desc.length > 28 ? D.desc.slice(0,26)+'..' : D.desc, bx + 4, iy + 14);
+        var rew = (D.rCoins ? '◉'+D.rCoins : '') + (D.rGems ? (D.rCoins?' ':'') + '◆'+D.rGems : '');
+        text(rew, bx + bw - 4, iy + 14, 9, '#ffd54a', 'right');
+        // Barra
+        var pby2 = iy + rh - 10, pbw2 = bw - 8;
+        ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(bx + 4, pby2, pbw2, 4);
+        var pct2 = Math.min(1, D.target > 0 ? a.progress / D.target : (a.done ? 1 : 0));
+        ctx.fillStyle = a.claimed ? '#4adf4a' : (a.done ? '#7dffa0' : '#c0a0ff'); ctx.fillRect(bx + 4, pby2, pbw2 * pct2, 4);
+        text(a.progress + '/' + D.target, bx + bw - 4, pby2 + 4, 8, '#8a8aaa', 'right');
+        if (a.done && !a.claimed) {
+          msnPanelRects.push({ x: bx, y: iy, w: bw, h: rh, claimAch: D.id });
+          text('CANJEAR', bx + bw/2, iy + rh/2 + 5, 9, '#7dffa0');
+        } else if (a.claimed) { text('✓', bx + bw - 10, iy + 24, 12, '#7dffa0', 'right'); }
+        iy += rh + 3;
+      });
+    }
   }
 
 
@@ -2408,6 +2707,40 @@
     }
 
     if (padMsgT > clock) text(padMsg, W / 2, 104, 14, '#7dffa0');
+    // Toast de misiones
+    if (msnToastT > clock && msnPendingToast) {
+      var ta = Math.min(1, (msnToastT - clock) * 2, (msnToastT - clock + 0.5) * 2);
+      ctx.globalAlpha = Math.min(1, ta);
+      var tw2 = Math.min(W - 20, 320), tx2 = W/2 - tw2/2, ty2 = H - 108;
+      ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(tx2, ty2, tw2, 30);
+      ctx.strokeStyle = msnPendingToast.col; ctx.lineWidth = 1.5; ctx.strokeRect(tx2, ty2, tw2, 30);
+      text(msnPendingToast.text, W/2, ty2 + 20, 13, msnPendingToast.col);
+      ctx.globalAlpha = 1;
+      if (msnToastT <= clock) msnPendingToast = null;
+    }
+    // HUD de misiones en pantalla de juego (indicador compacto)
+    if (state === 'playing') {
+      var anyActive = missions.some(function(m){ return !m.done && !m.claimed; });
+      if (anyActive) {
+        var hmy = 104;
+        missions.forEach(function(m) {
+          if (m.done || m.claimed) return;
+          var D = MISSION_DEFS.filter(function(d){ return d.id === m.defId; })[0];
+          if (!D) return;
+          var pct = Math.min(1, D.target > 0 ? m.progress / D.target : 0);
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(16, hmy, 140, 16);
+          var barCol = ['#00e5ff','#ff7820','#8cdaff','#ffe600','#7aff5a','#c064ff','#fff0c0'][D.el !== undefined ? (D.type === 'kills_el' ? D.el : 0) : 0];
+          ctx.fillStyle = barCol; ctx.fillRect(16, hmy, 140 * pct, 16);
+          ctx.globalAlpha = 0.85;
+          ctx.font = 'bold 9px "Segoe UI",Arial,sans-serif'; ctx.fillStyle = '#ffffff'; ctx.textAlign = 'left';
+          var short = D.desc.length > 22 ? D.desc.slice(0,20)+'..' : D.desc;
+          ctx.fillText(short + ' ' + m.progress+'/'+D.target, 18, hmy + 11);
+          ctx.globalAlpha = 1;
+          hmy += 19;
+        });
+      }
+    }
     text(muted ? '🔇' : '🔊', 16, 36, 22, '#ffffff', 'left');
     if (state === 'playing' || state === 'paused') text('⏸', 62, 36, 22, '#ffffff', 'left');
     ctx.restore();
@@ -2613,6 +2946,15 @@
     if (state === 'map') {
       if (x > W - 130 && y < 56) { state = 'menu'; return true; }
       if (x > W / 2 - 100 && x < W / 2 + 100 && y > H - 74 && y < H - 42) { openShop(); return true; }
+      // Panel de misiones
+      for (i = 0; i < msnPanelRects.length; i++) {
+        o = msnPanelRects[i];
+        if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) {
+          if (o.tab !== undefined) { msnShowAchiev = o.tab; return true; }
+          if (o.claim !== undefined) { claimMission(o.claim); return true; }
+          if (o.claimAch !== undefined) { claimAchiev(o.claimAch); return true; }
+        }
+      }
       for (i = 0; i < mapRects.length; i++) {
         o = mapRects[i];
         if ((x - o.x) * (x - o.x) + (y - o.y) * (y - o.y) < o.r * o.r) { if (o.lv <= prog) { mapSel = o.lv; start(o.lv); } return true; }
