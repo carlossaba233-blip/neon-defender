@@ -1843,17 +1843,66 @@
       if (mir) for (i = pts.length - 1; i >= 0; i--) ctx.lineTo(-pts[i][0], pts[i][1]);
       ctx.closePath();
     }
+    var wp = S.wing[Math.min(1, S.wing.length - 1)];
+    var wt = S.wing[Math.min(2, S.wing.length - 1)];
+    var cx = (wp[0] + wt[0]) * 0.45, cy = Math.min(wp[1], wt[1]) - 4;
     for (sd = 0; sd < 2; sd++) {
       ctx.save(); if (sd) ctx.scale(-1, 1);
-      var wg = ctx.createLinearGradient(0, 0, 24, 0); wg.addColorStop(0, T.wl); wg.addColorStop(1, T.wd);
+      // Cañón de ala
+      ctx.fillStyle = '#141a24';
+      ctx.fillRect(cx - 1.1, cy - 6, 2.2, 10);
+      ctx.fillStyle = T.acc;
+      ctx.fillRect(cx - 0.7, cy - 7, 1.4, 2.5);
+
+      var wg = ctx.createLinearGradient(0, -10, 28, 14);
+      wg.addColorStop(0, T.wl); wg.addColorStop(0.6, T.wd); wg.addColorStop(1, '#0d1218');
       ctx.fillStyle = wg; path(S.wing, false); ctx.fill();
-      ctx.strokeStyle = T.acc; ctx.lineWidth = 0.9; ctx.stroke();
+      ctx.strokeStyle = T.acc; ctx.lineWidth = 1.05; ctx.stroke();
+
+      // Línea de circuito interna en el ala
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(S.wing[0][0] + 2, S.wing[0][1] + 2);
+      ctx.lineTo(wt[0] * 0.75, wt[1] * 0.75);
+      ctx.stroke();
+
+      // Luz estroboscópica en punta de ala
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = T.acc;
+      ctx.beginPath(); ctx.arc(wt[0] * 0.92, wt[1] * 0.92, 1.4, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
       ctx.restore();
     }
-    var hg = ctx.createLinearGradient(-7, 0, 7, 0);
+    // Toberas traseras
+    ctx.fillStyle = '#12161f';
+    ctx.fillRect(-4.8, 11.5, 3.4, 3.5); ctx.fillRect(1.4, 11.5, 3.4, 3.5);
+    ctx.strokeStyle = T.acc; ctx.lineWidth = 0.6;
+    ctx.strokeRect(-4.8, 11.5, 3.4, 3.5); ctx.strokeRect(1.4, 11.5, 3.4, 3.5);
+
+    // Casco central
+    var hg = ctx.createLinearGradient(-8, 0, 8, 0);
     hg.addColorStop(0, T.h[0]); hg.addColorStop(0.5, T.h[1]); hg.addColorStop(1, T.h[2]);
     ctx.fillStyle = hg; path(S.hull, true); ctx.fill();
-    ctx.fillStyle = 'rgba(120,220,255,0.9)'; ctx.beginPath(); ctx.ellipse(0, -8, 2.4, 5, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 0.75; ctx.stroke();
+
+    // Espina dorsal y paneles
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.6;
+    ctx.beginPath(); ctx.moveTo(0, S.hull[0][1] + 5); ctx.lineTo(0, 12); ctx.stroke();
+
+    // Núcleo energético dorsal
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = T.acc;
+    ctx.beginPath(); ctx.arc(0, 4, 1.9, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Cabina cristal multicapa
+    var cg = ctx.createRadialGradient(-0.8, -10, 0.3, 0, -8, 6);
+    cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.35, '#8cebff'); cg.addColorStop(1, '#0c3554');
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.ellipse(0, -8, 2.6, 5.4, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = T.acc; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath(); ctx.ellipse(-0.8, -9.8, 0.65, 2.0, 0, 0, TAU); ctx.fill();
   }
   function drawShip(x, y, r, bank, thrust, pid, skinIdx) {
     var T = SHIPS[skinIdx !== undefined ? skinIdx : sel[pid || 0]];
@@ -1863,78 +1912,117 @@
     ctx.lineJoin = 'round';
     if (T.rar >= 2) {
       ctx.globalCompositeOperation = 'lighter';
-      var ag = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
-      ag.addColorStop(0, 'rgba(' + T.eng + ',' + (0.18 + 0.1 * Math.sin(clock * 4)) + ')'); ag.addColorStop(1, 'rgba(' + T.eng + ',0)');
-      ctx.fillStyle = ag; ctx.fillRect(-34, -34, 68, 68);
+      var ag = ctx.createRadialGradient(0, 0, 4, 0, 0, 36);
+      ag.addColorStop(0, 'rgba(' + T.eng + ',' + (0.22 + 0.1 * Math.sin(clock * 4)) + ')'); ag.addColorStop(1, 'rgba(' + T.eng + ',0)');
+      ctx.fillStyle = ag; ctx.fillRect(-36, -36, 72, 72);
       ctx.globalCompositeOperation = 'source-over';
     }
 
     ctx.globalCompositeOperation = 'lighter';
-    var fl = (10 + thrust * 9) * (0.8 + Math.random() * 0.5);
+    var fl = (11 + thrust * 10) * (0.85 + Math.random() * 0.4);
     [-3.2, 3.2].forEach(function (ex) {
-      var fg = ctx.createLinearGradient(0, 14, 0, 14 + fl);
-      fg.addColorStop(0, 'rgba(190,235,255,0.95)');
-      fg.addColorStop(0.35, 'rgba(255,170,40,0.8)');
-      fg.addColorStop(1, 'rgba(255,60,0,0)');
+      // Estela externa de plasma con color del motor
+      var fg = ctx.createLinearGradient(0, 14, 0, 14 + fl * 1.2);
+      fg.addColorStop(0, 'rgba(255,255,255,0.98)');
+      fg.addColorStop(0.25, 'rgba(' + T.eng + ',0.9)');
+      fg.addColorStop(0.65, 'rgba(255,140,30,0.65)');
+      fg.addColorStop(1, 'rgba(255,40,0,0)');
       ctx.fillStyle = fg;
       ctx.beginPath();
-      ctx.moveTo(ex - 2, 14);
-      ctx.quadraticCurveTo(ex - 1, 14 + fl * 0.6, ex, 14 + fl);
-      ctx.quadraticCurveTo(ex + 1, 14 + fl * 0.6, ex + 2, 14);
+      ctx.moveTo(ex - 2.4, 14);
+      ctx.quadraticCurveTo(ex - 1.3, 14 + fl * 0.65, ex, 14 + fl * 1.15);
+      ctx.quadraticCurveTo(ex + 1.3, 14 + fl * 0.65, ex + 2.4, 14);
+      ctx.closePath(); ctx.fill();
+
+      // Núcleo incandescente blanco-azulado
+      ctx.fillStyle = 'rgba(240,250,255,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(ex - 1.0, 14);
+      ctx.lineTo(ex, 14 + fl * 0.55);
+      ctx.lineTo(ex + 1.0, 14);
       ctx.closePath(); ctx.fill();
     });
-    var eg = ctx.createRadialGradient(0, 16, 0, 0, 16, 18);
-    eg.addColorStop(0, 'rgba(' + T.eng + ',0.5)'); eg.addColorStop(1, 'rgba(' + T.eng + ',0)');
-    ctx.fillStyle = eg; ctx.fillRect(-18, -2, 36, 40);
+    var eg = ctx.createRadialGradient(0, 16, 0, 0, 16, 20);
+    eg.addColorStop(0, 'rgba(' + T.eng + ',0.6)'); eg.addColorStop(1, 'rgba(' + T.eng + ',0)');
+    ctx.fillStyle = eg; ctx.fillRect(-20, -2, 40, 42);
     ctx.globalCompositeOperation = 'source-over';
 
     if (T.shape) { drawAlt(T); ctx.restore(); return; }
-    ctx.fillStyle = '#2b3642';
-    ctx.beginPath(); ctx.moveTo(-5, 6); ctx.lineTo(-9, 18); ctx.lineTo(-5, 15); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(5, 6); ctx.lineTo(9, 18); ctx.lineTo(5, 15); ctx.closePath(); ctx.fill();
 
-    var wl = ctx.createLinearGradient(-20, 0, -5, 0);
-    wl.addColorStop(0, T.wd); wl.addColorStop(1, T.wl);
+    // Cañones láser de ala
+    ctx.fillStyle = '#151c24';
+    ctx.fillRect(-13.5, 0, 2.2, 11); ctx.fillRect(11.3, 0, 2.2, 11);
+    ctx.fillStyle = T.acc;
+    ctx.fillRect(-13.1, -2.2, 1.4, 2.6); ctx.fillRect(11.7, -2.2, 1.4, 2.6);
+
+    // Aletas estabilizadoras traseras
+    ctx.fillStyle = '#242e3a';
+    ctx.beginPath(); ctx.moveTo(-5, 6); ctx.lineTo(-10, 19); ctx.lineTo(-4.5, 15); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(5, 6); ctx.lineTo(10, 19); ctx.lineTo(4.5, 15); ctx.closePath(); ctx.fill();
+
+    // Alas principales con gradiente metálico y bisel
+    var wl = ctx.createLinearGradient(-21, 0, -5, 0);
+    wl.addColorStop(0, T.wd); wl.addColorStop(0.7, T.wl); wl.addColorStop(1, '#1b242e');
     ctx.fillStyle = wl;
-    ctx.beginPath(); ctx.moveTo(-5, -2); ctx.lineTo(-20, 16); ctx.lineTo(-18, 20); ctx.lineTo(-5, 12); ctx.closePath(); ctx.fill();
-    var wr = ctx.createLinearGradient(20, 0, 5, 0);
-    wr.addColorStop(0, T.wd); wr.addColorStop(1, T.wl);
+    ctx.beginPath(); ctx.moveTo(-5, -4); ctx.lineTo(-21, 15); ctx.lineTo(-18.5, 20); ctx.lineTo(-5, 12.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = T.acc; ctx.lineWidth = 0.85; ctx.stroke();
+
+    var wr = ctx.createLinearGradient(21, 0, 5, 0);
+    wr.addColorStop(0, T.wd); wr.addColorStop(0.7, T.wl); wr.addColorStop(1, '#1b242e');
     ctx.fillStyle = wr;
-    ctx.beginPath(); ctx.moveTo(5, -2); ctx.lineTo(20, 16); ctx.lineTo(18, 20); ctx.lineTo(5, 12); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(5, -4); ctx.lineTo(21, 15); ctx.lineTo(18.5, 20); ctx.lineTo(5, 12.5); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = T.acc; ctx.lineWidth = 0.85; ctx.stroke();
 
-    ctx.strokeStyle = T.acc; ctx.lineWidth = 0.9;
-    ctx.beginPath(); ctx.moveTo(-7, 4); ctx.lineTo(-17, 16); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(7, 4); ctx.lineTo(17, 16); ctx.stroke();
+    // Paneles internos y líneas de energía en las alas
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 0.7;
+    ctx.beginPath(); ctx.moveTo(-6.5, 2); ctx.lineTo(-17.5, 15.5); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6.5, 2); ctx.lineTo(17.5, 15.5); ctx.stroke();
 
-    var fg2 = ctx.createLinearGradient(-7, 0, 7, 0);
+    // Fuselaje central aerodinámico
+    var fg2 = ctx.createLinearGradient(-7.5, 0, 7.5, 0);
     fg2.addColorStop(0, T.h[0]); fg2.addColorStop(0.45, T.h[1]); fg2.addColorStop(1, T.h[2]);
     ctx.fillStyle = fg2;
     ctx.beginPath();
-    ctx.moveTo(0, -26);
-    ctx.quadraticCurveTo(7, -8, 6, 14);
-    ctx.lineTo(-6, 14);
-    ctx.quadraticCurveTo(-7, -8, 0, -26);
+    ctx.moveTo(0, -27);
+    ctx.quadraticCurveTo(7.5, -8, 6.2, 14.5);
+    ctx.lineTo(-6.2, 14.5);
+    ctx.quadraticCurveTo(-7.5, -8, 0, -27);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.6;
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.65; ctx.stroke();
+
+    // Costuras del blindaje y espina central
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 0.6;
     ctx.beginPath(); ctx.moveTo(0, -2); ctx.lineTo(0, 14); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(-5.5, 4); ctx.lineTo(5.5, 4); ctx.stroke();
 
+    // Toberas de escape blindadas
     ctx.fillStyle = '#12161c';
     ctx.fillRect(-5.2, 13, 4, 3.2); ctx.fillRect(1.2, 13, 4, 3.2);
+    ctx.strokeStyle = T.acc; ctx.lineWidth = 0.6;
+    ctx.strokeRect(-5.2, 13, 4, 3.2); ctx.strokeRect(1.2, 13, 4, 3.2);
 
-    var cg = ctx.createRadialGradient(-0.8, -12, 0.4, 0, -10, 6);
-    cg.addColorStop(0, '#d5f6ff'); cg.addColorStop(0.5, '#3d9bd1'); cg.addColorStop(1, '#0a2f4c');
+    // Núcleo reactor dorsal
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = T.acc;
+    ctx.beginPath(); ctx.arc(0, 7, 1.8, 0, TAU); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Cabina de mando con reflejo HUD
+    var cg = ctx.createRadialGradient(-0.8, -12, 0.4, 0, -10, 6.5);
+    cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.3, '#a8f0ff'); cg.addColorStop(0.65, '#2b88c4'); cg.addColorStop(1, '#08253d');
     ctx.fillStyle = cg;
-    ctx.beginPath(); ctx.ellipse(0, -10, 2.7, 6, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.beginPath(); ctx.ellipse(-0.9, -12, 0.7, 2.2, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -10, 2.8, 6.2, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = T.acc; ctx.lineWidth = 0.6; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.ellipse(-0.9, -12, 0.7, 2.3, 0, 0, TAU); ctx.fill();
 
+    // Luces de navegación en puntas de ala
     var on = Math.sin(clock * 6) > 0;
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = on ? 'rgba(255,50,50,0.95)' : 'rgba(255,50,50,0.2)';
-    ctx.beginPath(); ctx.arc(-19, 18.5, 1.3, 0, TAU); ctx.fill();
-    ctx.fillStyle = on ? 'rgba(60,255,100,0.95)' : 'rgba(60,255,100,0.2)';
-    ctx.beginPath(); ctx.arc(19, 18.5, 1.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = on ? 'rgba(255,50,50,0.95)' : 'rgba(255,50,50,0.25)';
+    ctx.beginPath(); ctx.arc(-19.5, 18.2, 1.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = on ? 'rgba(60,255,100,0.95)' : 'rgba(60,255,100,0.25)';
+    ctx.beginPath(); ctx.arc(19.5, 18.2, 1.4, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
     ctx.restore();
@@ -1958,47 +2046,77 @@
     ctx.rotate(Math.sin(clock * 2 + e.ph) * 0.05);
 
     ctx.globalCompositeOperation = 'lighter';
-    var gg = ctx.createRadialGradient(0, r * 0.6, 0, 0, r * 0.6, r * 1.3);
-    gg.addColorStop(0, rgba(P.glow, 0.55 + 0.2 * Math.sin(clock * 5 + e.ph)));
+    var gg = ctx.createRadialGradient(0, r * 0.55, 0, 0, r * 0.55, r * 1.4);
+    gg.addColorStop(0, rgba(P.glow, 0.6 + 0.2 * Math.sin(clock * 5 + e.ph)));
     gg.addColorStop(1, rgba(P.glow, 0));
-    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, r * 0.6, r * 1.3, 0, TAU); ctx.fill();
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, r * 0.55, r * 1.4, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
-    var hg = ctx.createLinearGradient(0, -r * 0.3, 0, r * 0.65);
+    // Emisor inferior antigravedad
+    ctx.fillStyle = P.hull[3];
+    ctx.beginPath(); ctx.ellipse(0, r * 0.4, r * 0.62, r * 0.24, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = rgba(P.glow, 0.5); ctx.lineWidth = 0.9; ctx.stroke();
+
+    // Disco principal blindado
+    var hg = ctx.createLinearGradient(0, -r * 0.35, 0, r * 0.65);
     hg.addColorStop(0, P.hull[0]); hg.addColorStop(0.35, P.hull[1]);
     hg.addColorStop(0.7, P.hull[2]); hg.addColorStop(1, P.hull[3]);
     ctx.fillStyle = hg;
-    ctx.beginPath(); ctx.ellipse(0, r * 0.15, r * 1.15, r * 0.4, 0, 0, TAU); ctx.fill();
-    ctx.fillStyle = P.hull[3];
-    ctx.beginPath(); ctx.ellipse(0, r * 0.38, r * 0.6, r * 0.22, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.ellipse(0, r * 0.15, r * 1.15, r * 0.4, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, r * 0.15, r * 1.18, r * 0.42, 0, 0, TAU); ctx.fill();
 
+    // Costuras radiales del platillo
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.8;
+    for (var s = -2; s <= 2; s++) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.22, -r * 0.02);
+      ctx.lineTo(s * r * 0.44, r * 0.48);
+      ctx.stroke();
+    }
+
+    // Bisel luminoso superior e inferior
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.ellipse(0, r * 0.15, r * 1.18, r * 0.42, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+    ctx.strokeStyle = rgba(P.glow, 0.6); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(0, r * 0.15, r * 1.18, r * 0.42, 0, Math.PI * 0.08, Math.PI * 0.92); ctx.stroke();
+
+    // Luces orbitales giratorias
     ctx.globalCompositeOperation = 'lighter';
     for (var i = 0; i < 8; i++) {
-      var a = clock * 2.2 + i * Math.PI / 4 + e.ph;
+      var a = clock * 2.4 + i * Math.PI / 4 + e.ph;
       if (Math.sin(a) > -0.2) {
-        var lx = Math.cos(a) * r * 0.95, ly = r * 0.17 + Math.sin(a) * r * 0.3;
-        var lc = (i % 2 === 0) ? [255, 235, 120] : P.glow;
-        var lg = ctx.createRadialGradient(lx, ly, 0, lx, ly, r * 0.2);
-        lg.addColorStop(0, rgba(lc, 0.95)); lg.addColorStop(1, rgba(lc, 0));
-        ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(lx, ly, r * 0.2, 0, TAU); ctx.fill();
+        var lx = Math.cos(a) * r * 0.96, ly = r * 0.17 + Math.sin(a) * r * 0.31;
+        var lc = (i % 2 === 0) ? [255, 240, 140] : P.glow;
+        var lg = ctx.createRadialGradient(lx, ly, 0, lx, ly, r * 0.22);
+        lg.addColorStop(0, '#ffffff');
+        lg.addColorStop(0.35, rgba(lc, 0.95));
+        lg.addColorStop(1, rgba(lc, 0));
+        ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(lx, ly, r * 0.22, 0, TAU); ctx.fill();
       }
     }
     ctx.globalCompositeOperation = 'source-over';
 
-    var dg = ctx.createRadialGradient(-r * 0.18, -r * 0.28, r * 0.04, 0, -r * 0.05, r * 0.6);
-    dg.addColorStop(0, 'rgba(255,255,255,0.95)');
-    dg.addColorStop(0.25, rgba(P.dome, 0.85));
+    // Cúpula translúcida con anillo base
+    ctx.fillStyle = P.hull[2];
+    ctx.beginPath(); ctx.ellipse(0, -r * 0.01, r * 0.6, r * 0.15, 0, 0, TAU); ctx.fill();
+
+    var dg = ctx.createRadialGradient(-r * 0.18, -r * 0.28, r * 0.04, 0, -r * 0.05, r * 0.62);
+    dg.addColorStop(0, 'rgba(255,255,255,0.98)');
+    dg.addColorStop(0.28, rgba(P.dome, 0.88));
     dg.addColorStop(1, rgba(P.glow, 0.55));
     ctx.fillStyle = dg;
-    ctx.beginPath(); ctx.ellipse(0, -r * 0.02, r * 0.55, r * 0.5, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -r * 0.02, r * 0.56, r * 0.52, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)'; ctx.lineWidth = 0.8; ctx.stroke();
 
+    // Núcleo energético interno + reflejo cristal
     ctx.globalCompositeOperation = 'lighter';
     var cp = 0.5 + 0.5 * Math.sin(clock * 4 + e.ph);
-    var cg = ctx.createRadialGradient(0, -r * 0.15, 0, 0, -r * 0.15, r * 0.3);
-    cg.addColorStop(0, rgba(P.glow, 0.5 + 0.4 * cp)); cg.addColorStop(1, rgba(P.glow, 0));
-    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, -r * 0.15, r * 0.3, 0, TAU); ctx.fill();
+    var cg = ctx.createRadialGradient(0, -r * 0.16, 0, 0, -r * 0.16, r * 0.34);
+    cg.addColorStop(0, 'rgba(255,255,255,0.9)');
+    cg.addColorStop(0.4, rgba(P.glow, 0.55 + 0.4 * cp));
+    cg.addColorStop(1, rgba(P.glow, 0));
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, -r * 0.16, r * 0.34, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.beginPath(); ctx.ellipse(-r * 0.2, -r * 0.26, r * 0.12, r * 0.06, -0.45, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
     ctx.restore();
@@ -2011,43 +2129,61 @@
     ctx.translate(x, y);
     ctx.lineJoin = 'round';
 
+    // Propulsores dobles traseros
     ctx.globalCompositeOperation = 'lighter';
-    var fl = r * (0.45 + Math.random() * 0.3);
-    [-0.35, 0.35].forEach(function (sx) {
+    var fl = r * (0.55 + Math.random() * 0.35);
+    [-0.36, 0.36].forEach(function (sx) {
       var fg = ctx.createLinearGradient(0, -r * 0.5, 0, -r * 0.5 - fl);
-      fg.addColorStop(0, 'rgba(255,190,90,0.9)'); fg.addColorStop(1, 'rgba(255,80,0,0)');
+      fg.addColorStop(0, 'rgba(255,245,200,0.95)');
+      fg.addColorStop(0.4, 'rgba(255,140,50,0.85)');
+      fg.addColorStop(1, 'rgba(255,40,0,0)');
       ctx.fillStyle = fg;
-      ctx.beginPath(); ctx.moveTo(sx * r - r * 0.12, -r * 0.5); ctx.lineTo(sx * r, -r * 0.5 - fl); ctx.lineTo(sx * r + r * 0.12, -r * 0.5); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(sx * r - r * 0.14, -r * 0.5); ctx.lineTo(sx * r, -r * 0.5 - fl); ctx.lineTo(sx * r + r * 0.14, -r * 0.5); ctx.closePath(); ctx.fill();
     });
     ctx.globalCompositeOperation = 'source-over';
 
-    var wg = ctx.createLinearGradient(-r * 1.15, 0, r * 1.15, 0);
-    wg.addColorStop(0, '#3a1d52'); wg.addColorStop(0.5, '#cdb2e6'); wg.addColorStop(1, '#3a1d52');
+    // Cañones pesados gemelos
+    ctx.fillStyle = '#15091f';
+    ctx.fillRect(-r * 0.8, -r * 0.05, r * 0.16, r * 0.65);
+    ctx.fillRect(r * 0.64, -r * 0.05, r * 0.16, r * 0.65);
+    ctx.fillStyle = '#ff5070';
+    ctx.fillRect(-r * 0.77, r * 0.52, r * 0.1, r * 0.14);
+    ctx.fillRect(r * 0.67, r * 0.52, r * 0.1, r * 0.14);
+
+    // Alas agresivas en flecha invertida
+    var wg = ctx.createLinearGradient(-r * 1.2, 0, r * 1.2, 0);
+    wg.addColorStop(0, '#2a123d'); wg.addColorStop(0.3, '#8854b8'); wg.addColorStop(0.5, '#e2cbf5'); wg.addColorStop(0.7, '#8854b8'); wg.addColorStop(1, '#2a123d');
     ctx.fillStyle = wg;
     ctx.beginPath();
-    ctx.moveTo(0, r * 1.2);
-    ctx.lineTo(r * 1.15, -r * 0.6);
-    ctx.lineTo(r * 0.5, -r * 0.25);
-    ctx.lineTo(0, -r * 0.45);
-    ctx.lineTo(-r * 0.5, -r * 0.25);
-    ctx.lineTo(-r * 1.15, -r * 0.6);
+    ctx.moveTo(0, r * 1.25);
+    ctx.lineTo(r * 0.45, r * 0.35);
+    ctx.lineTo(r * 1.2, -r * 0.62);
+    ctx.lineTo(r * 0.52, -r * 0.28);
+    ctx.lineTo(0, -r * 0.5);
+    ctx.lineTo(-r * 0.52, -r * 0.28);
+    ctx.lineTo(-r * 1.2, -r * 0.62);
+    ctx.lineTo(-r * 0.45, r * 0.35);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,140,220,0.65)'; ctx.lineWidth = 1.1; ctx.stroke();
 
-    var bg = ctx.createLinearGradient(-r * 0.3, 0, r * 0.3, 0);
-    bg.addColorStop(0, '#2a1440'); bg.addColorStop(0.5, '#7b4aa3'); bg.addColorStop(1, '#2a1440');
+    // Placas de armadura central
+    var bg = ctx.createLinearGradient(-r * 0.35, -r * 0.4, r * 0.35, r * 0.9);
+    bg.addColorStop(0, '#1f0d30'); bg.addColorStop(0.5, '#6a3896'); bg.addColorStop(1, '#2a1440');
     ctx.fillStyle = bg;
-    ctx.beginPath(); ctx.moveTo(0, r * 1.05); ctx.lineTo(r * 0.3, -r * 0.35); ctx.lineTo(-r * 0.3, -r * 0.35); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(0, r * 1.08); ctx.lineTo(r * 0.34, -r * 0.38); ctx.lineTo(-r * 0.34, -r * 0.38); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.7; ctx.stroke();
 
-    // Cañones
-    ctx.fillStyle = '#15091f';
-    ctx.fillRect(-r * 0.78, -r * 0.1, r * 0.14, r * 0.55); ctx.fillRect(r * 0.64, -r * 0.1, r * 0.14, r * 0.55);
+    // Visor de cabina y núcleo de artillería
+    ctx.fillStyle = '#ff2a4b';
+    ctx.beginPath(); ctx.moveTo(0, r * 0.52); ctx.lineTo(r * 0.2, r * 0.12); ctx.lineTo(0, r * 0.22); ctx.lineTo(-r * 0.2, r * 0.12); ctx.closePath(); ctx.fill();
 
     ctx.globalCompositeOperation = 'lighter';
     var cp = 0.55 + 0.45 * Math.sin(clock * 6 + e.ph);
-    var cg = ctx.createRadialGradient(0, r * 0.15, 0, 0, r * 0.15, r * 0.35);
-    cg.addColorStop(0, rgba([255, 80, 60], 0.9 * cp)); cg.addColorStop(1, rgba([255, 80, 60], 0));
-    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, r * 0.15, r * 0.35, 0, TAU); ctx.fill();
+    var cg = ctx.createRadialGradient(0, r * 0.18, 0, 0, r * 0.18, r * 0.4);
+    cg.addColorStop(0, 'rgba(255,230,220,' + (0.9 * cp) + ')');
+    cg.addColorStop(0.45, rgba([255, 70, 90], 0.85 * cp));
+    cg.addColorStop(1, rgba([255, 60, 60], 0));
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, r * 0.18, r * 0.4, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
     ctx.restore();
@@ -2061,23 +2197,28 @@
     ctx.lineJoin = 'round';
 
     ctx.globalCompositeOperation = 'lighter';
-    var gg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.5);
-    gg.addColorStop(0, 'rgba(255,90,40,0.25)'); gg.addColorStop(1, 'rgba(255,90,40,0)');
-    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.fill();
+    var gg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.55);
+    gg.addColorStop(0, 'rgba(255,95,40,0.32)'); gg.addColorStop(1, 'rgba(255,95,40,0)');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.55, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
-    // Cañones inferiores
-    ctx.fillStyle = '#1b1e24';
-    ctx.fillRect(-r * 0.62, r * 0.5, r * 0.22, r * 0.62); ctx.fillRect(r * 0.4, r * 0.5, r * 0.22, r * 0.62);
+    // Baterías de cañones dobles inferiores
+    ctx.fillStyle = '#14171d';
+    ctx.fillRect(-r * 0.68, r * 0.48, r * 0.26, r * 0.66);
+    ctx.fillRect(r * 0.42, r * 0.48, r * 0.26, r * 0.66);
+    ctx.strokeStyle = 'rgba(255,140,70,0.5)'; ctx.lineWidth = 0.8;
+    ctx.strokeRect(-r * 0.68, r * 0.48, r * 0.26, r * 0.66);
+    ctx.strokeRect(r * 0.42, r * 0.48, r * 0.26, r * 0.66);
+
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = rgba([255, 120, 40], 0.5 + 0.4 * Math.sin(clock * 5 + e.ph));
-    ctx.beginPath(); ctx.arc(-r * 0.51, r * 1.12, r * 0.1, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.arc(r * 0.51, r * 1.12, r * 0.1, 0, TAU); ctx.fill();
+    ctx.fillStyle = rgba([255, 130, 45], 0.55 + 0.4 * Math.sin(clock * 5 + e.ph));
+    ctx.beginPath(); ctx.arc(-r * 0.55, r * 1.14, r * 0.12, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.55, r * 1.14, r * 0.12, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
-    // Casco octogonal
-    var hg = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.1);
-    hg.addColorStop(0, '#dfe5ec'); hg.addColorStop(0.55, '#7d8896'); hg.addColorStop(1, '#262a31');
+    // Casco octogonal pesado con biselado
+    var hg = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.12);
+    hg.addColorStop(0, '#eef3f8'); hg.addColorStop(0.5, '#7c8999'); hg.addColorStop(0.85, '#343b46'); hg.addColorStop(1, '#1a1e24');
     ctx.fillStyle = hg;
     ctx.beginPath();
     for (var i = 0; i < 8; i++) {
@@ -2085,138 +2226,253 @@
       ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
     }
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,180,120,0.55)'; ctx.lineWidth = 1.2; ctx.stroke();
 
-    // Placas de blindaje
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.68, 0, TAU); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r * 0.95, 0); ctx.lineTo(-r * 0.68, 0); ctx.moveTo(r * 0.95, 0); ctx.lineTo(r * 0.68, 0);
-    ctx.moveTo(0, -r * 0.95); ctx.lineTo(0, -r * 0.68); ctx.moveTo(0, r * 0.95); ctx.lineTo(0, r * 0.68); ctx.stroke();
+    // Placas de blindaje interiores y remaches luminosos
+    ctx.fillStyle = '#232830';
+    ctx.beginPath();
+    for (i = 0; i < 8; i++) {
+      var a2 = Math.PI / 8 + i * Math.PI / 4;
+      ctx.lineTo(Math.cos(a2) * r * 0.68, Math.sin(a2) * r * 0.68);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,110,50,0.5)'; ctx.lineWidth = 1; ctx.stroke();
 
-    // Núcleo
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.96, 0); ctx.lineTo(-r * 0.45, 0); ctx.moveTo(r * 0.96, 0); ctx.lineTo(r * 0.45, 0);
+    ctx.moveTo(0, -r * 0.96); ctx.lineTo(0, -r * 0.45); ctx.moveTo(0, r * 0.96); ctx.lineTo(0, r * 0.45);
+    ctx.stroke();
+
+    // Núcleo termonuclear con anillo giratorio
     ctx.globalCompositeOperation = 'lighter';
     var cp = 0.5 + 0.5 * Math.sin(clock * 4 + e.ph);
-    var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.5);
-    cg.addColorStop(0, 'rgba(255,230,180,' + (0.8 + 0.2 * cp) + ')');
-    cg.addColorStop(0.4, 'rgba(255,90,40,' + (0.6 + 0.3 * cp) + ')');
-    cg.addColorStop(1, 'rgba(255,60,20,0)');
-    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, r * 0.5, 0, TAU); ctx.fill();
+    var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.52);
+    cg.addColorStop(0, 'rgba(255,250,220,' + (0.9 + 0.1 * cp) + ')');
+    cg.addColorStop(0.4, 'rgba(255,100,40,' + (0.7 + 0.25 * cp) + ')');
+    cg.addColorStop(1, 'rgba(255,50,10,0)');
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, r * 0.52, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
     ctx.restore();
   }
 
-  // Tejedor: ala ondulada verde
+  // Tejedor: ala bio-mecánica ondulada verde
   function drawWeaver(e) {
     var r = e.r, cp = 0.5 + 0.5 * Math.sin(clock * 5 + e.ph);
     ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(Math.sin(clock * 3 + e.ph) * 0.12); ctx.lineJoin = 'round';
     ctx.globalCompositeOperation = 'lighter';
-    var gg = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.5);
-    gg.addColorStop(0, 'rgba(80,255,160,0.3)'); gg.addColorStop(1, 'rgba(80,255,160,0)');
-    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, TAU); ctx.fill();
+    var gg = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.55);
+    gg.addColorStop(0, 'rgba(80,255,160,0.35)'); gg.addColorStop(1, 'rgba(80,255,160,0)');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.55, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
-    var wg = ctx.createLinearGradient(-r * 1.3, 0, r * 1.3, 0);
-    wg.addColorStop(0, '#0c3a2c'); wg.addColorStop(0.5, '#7ff5c0'); wg.addColorStop(1, '#0c3a2c');
+
+    // Aletas secundarias traseras
+    ctx.fillStyle = '#092b20';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.85, -r * 0.3); ctx.lineTo(-r * 1.15, -r * 0.85); ctx.lineTo(-r * 0.35, -r * 0.45);
+    ctx.moveTo(r * 0.85, -r * 0.3); ctx.lineTo(r * 1.15, -r * 0.85); ctx.lineTo(r * 0.35, -r * 0.45);
+    ctx.fill();
+
+    // Manto principal curvo
+    var wg = ctx.createLinearGradient(-r * 1.35, 0, r * 1.35, 0);
+    wg.addColorStop(0, '#0a3326'); wg.addColorStop(0.28, '#28b882'); wg.addColorStop(0.5, '#a8ffda'); wg.addColorStop(0.72, '#28b882'); wg.addColorStop(1, '#0a3326');
     ctx.fillStyle = wg;
-    ctx.beginPath(); ctx.moveTo(0, -r * 0.55);
-    ctx.quadraticCurveTo(r * 0.95, -r * 1.15, r * 1.3, r * 0.1);
-    ctx.quadraticCurveTo(r * 0.6, r * 0.05, 0, r * 0.95);
-    ctx.quadraticCurveTo(-r * 0.6, r * 0.05, -r * 1.3, r * 0.1);
-    ctx.quadraticCurveTo(-r * 0.95, -r * 1.15, 0, -r * 0.55);
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.6);
+    ctx.quadraticCurveTo(r * 0.98, -r * 1.2, r * 1.35, r * 0.15);
+    ctx.quadraticCurveTo(r * 0.62, r * 0.05, 0, r * 1.02);
+    ctx.quadraticCurveTo(-r * 0.62, r * 0.05, -r * 1.35, r * 0.15);
+    ctx.quadraticCurveTo(-r * 0.98, -r * 1.2, 0, -r * 0.6);
     ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(160,255,215,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(170,255,220,0.75)'; ctx.lineWidth = 1.1; ctx.stroke();
+
+    // Venas de bio-energía
+    ctx.strokeStyle = 'rgba(220,255,240,0.5)'; ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.1); ctx.quadraticCurveTo(r * 0.55, -r * 0.35, r * 1.05, -r * 0.05);
+    ctx.moveTo(0, r * 0.1); ctx.quadraticCurveTo(-r * 0.55, -r * 0.35, -r * 1.05, -r * 0.05);
+    ctx.stroke();
+
     ctx.globalCompositeOperation = 'lighter';
-    var cg = ctx.createRadialGradient(0, r * 0.1, 0, 0, r * 0.1, r * 0.4);
-    cg.addColorStop(0, 'rgba(220,255,235,' + (0.6 + 0.4 * cp) + ')'); cg.addColorStop(1, 'rgba(80,255,160,0)');
-    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, r * 0.1, r * 0.4, 0, TAU); ctx.fill();
+    var cg = ctx.createRadialGradient(0, r * 0.1, 0, 0, r * 0.1, r * 0.45);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.35, 'rgba(160,255,215,' + (0.65 + 0.35 * cp) + ')');
+    cg.addColorStop(1, 'rgba(80,255,160,0)');
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, r * 0.1, r * 0.45, 0, TAU); ctx.fill();
     ctx.restore();
   }
-  // Dron suicida: flecha roja que apunta hacia abajo
+  // Dron suicida: flecha roja sobrecargada que apunta hacia abajo
   function drawDrone(e) {
-    var r = e.r, fl = r * (0.8 + Math.random() * 0.5);
+    var r = e.r, fl = r * (0.9 + Math.random() * 0.55);
     ctx.save(); ctx.translate(e.x, e.y); ctx.lineJoin = 'round';
     ctx.globalCompositeOperation = 'lighter';
-    var fg = ctx.createLinearGradient(0, -r * 0.6, 0, -r * 0.6 - fl);
-    fg.addColorStop(0, 'rgba(255,200,100,0.9)'); fg.addColorStop(1, 'rgba(255,60,0,0)');
-    ctx.fillStyle = fg; ctx.beginPath(); ctx.moveTo(-r * 0.35, -r * 0.6); ctx.lineTo(0, -r * 0.6 - fl); ctx.lineTo(r * 0.35, -r * 0.6); ctx.closePath(); ctx.fill();
+    var fg = ctx.createLinearGradient(0, -r * 0.55, 0, -r * 0.55 - fl);
+    fg.addColorStop(0, 'rgba(255,250,210,0.98)');
+    fg.addColorStop(0.35, 'rgba(255,130,40,0.85)');
+    fg.addColorStop(1, 'rgba(255,30,0,0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath(); ctx.moveTo(-r * 0.38, -r * 0.55); ctx.lineTo(0, -r * 0.55 - fl); ctx.lineTo(r * 0.38, -r * 0.55); ctx.closePath(); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
+
+    // Aletas cortantes exteriores
     var hg = ctx.createLinearGradient(-r, 0, r, 0);
-    hg.addColorStop(0, '#5a1010'); hg.addColorStop(0.5, '#ff8a70'); hg.addColorStop(1, '#5a1010');
+    hg.addColorStop(0, '#420909'); hg.addColorStop(0.3, '#c42b2b'); hg.addColorStop(0.5, '#ff9d88'); hg.addColorStop(0.7, '#c42b2b'); hg.addColorStop(1, '#420909');
     ctx.fillStyle = hg;
-    ctx.beginPath(); ctx.moveTo(0, r * 1.15); ctx.lineTo(r * 0.9, -r * 0.7); ctx.lineTo(0, -r * 0.3); ctx.lineTo(-r * 0.9, -r * 0.7); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,220,200,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, r * 1.22);
+    ctx.lineTo(r * 0.95, -r * 0.72);
+    ctx.lineTo(r * 0.32, -r * 0.42);
+    ctx.lineTo(0, -r * 0.65);
+    ctx.lineTo(-r * 0.32, -r * 0.42);
+    ctx.lineTo(-r * 0.95, -r * 0.72);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,180,160,0.7)'; ctx.lineWidth = 1; ctx.stroke();
+
+    // Aguijón frontal oscuro
+    ctx.fillStyle = '#260505';
+    ctx.beginPath(); ctx.moveTo(0, r * 0.95); ctx.lineTo(r * 0.25, -r * 0.25); ctx.lineTo(-r * 0.25, -r * 0.25); ctx.closePath(); ctx.fill();
+
+    // Ojiva explosiva parpadeante
     ctx.globalCompositeOperation = 'lighter';
-    var eg = ctx.createRadialGradient(0, r * 0.1, 0, 0, r * 0.1, r * 0.4);
-    eg.addColorStop(0, 'rgba(255,255,200,' + (0.6 + 0.4 * Math.sin(clock * 12 + e.ph)) + ')'); eg.addColorStop(1, 'rgba(255,40,20,0)');
-    ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, r * 0.1, r * 0.4, 0, TAU); ctx.fill();
+    var pulse = 0.6 + 0.4 * Math.sin(clock * 14 + e.ph);
+    var eg = ctx.createRadialGradient(0, r * 0.12, 0, 0, r * 0.12, r * 0.48);
+    eg.addColorStop(0, 'rgba(255,255,240,' + pulse + ')');
+    eg.addColorStop(0.45, 'rgba(255,60,30,' + (0.85 * pulse) + ')');
+    eg.addColorStop(1, 'rgba(255,20,0,0)');
+    ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, r * 0.12, r * 0.48, 0, TAU); ctx.fill();
     ctx.restore();
   }
-  // Bombardero: vaina ámbar con compuerta
+  // Bombardero: vaina pesada ámbar con góndolas y bahía de bombas
   function drawBomber(e) {
     var r = e.r, cp = 0.5 + 0.5 * Math.sin(clock * 4 + e.ph);
     ctx.save(); ctx.translate(e.x, e.y); ctx.lineJoin = 'round';
     ctx.globalCompositeOperation = 'lighter';
-    var gg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.6);
-    gg.addColorStop(0, 'rgba(255,170,40,0.22)'); gg.addColorStop(1, 'rgba(255,170,40,0)');
-    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.6, 0, TAU); ctx.fill();
+    var gg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.65);
+    gg.addColorStop(0, 'rgba(255,175,45,0.28)'); gg.addColorStop(1, 'rgba(255,175,45,0)');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.65, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = '#4a3410';
-    ctx.beginPath(); ctx.ellipse(-r * 1.05, r * 0.1, r * 0.28, r * 0.5, 0, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(r * 1.05, r * 0.1, r * 0.28, r * 0.5, 0, 0, TAU); ctx.fill();
-    var hg = ctx.createLinearGradient(0, -r * 0.75, 0, r * 0.75);
-    hg.addColorStop(0, '#ffe3a0'); hg.addColorStop(0.5, '#d9953a'); hg.addColorStop(1, '#5a3a10');
-    ctx.fillStyle = hg; ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.75, 0, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,230,170,0.4)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = '#1a1208'; ctx.fillRect(-r * 0.45, r * 0.2, r * 0.9, r * 0.4);
+
+    // Góndolas laterales blindadas con propulsores
+    [-1, 1].forEach(function (s) {
+      ctx.fillStyle = '#3b280c';
+      ctx.beginPath(); ctx.ellipse(s * r * 1.06, r * 0.08, r * 0.3, r * 0.56, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,200,110,0.5)'; ctx.lineWidth = 0.9; ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,160,40,' + (0.5 + 0.4 * cp) + ')';
+      ctx.beginPath(); ctx.arc(s * r * 1.06, r * 0.55, r * 0.14, 0, TAU); ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    });
+
+    // Casco principal abovedado
+    var hg = ctx.createLinearGradient(0, -r * 0.78, 0, r * 0.78);
+    hg.addColorStop(0, '#fff0c2'); hg.addColorStop(0.45, '#e09a38'); hg.addColorStop(0.85, '#6e4512'); hg.addColorStop(1, '#2e1b05');
+    ctx.fillStyle = hg; ctx.beginPath(); ctx.ellipse(0, 0, r * 1.02, r * 0.78, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,230,170,0.55)'; ctx.lineWidth = 1.1; ctx.stroke();
+
+    // Costuras de blindaje
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 0.9;
+    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.65, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+
+    // Compuerta de bombas y ojiva de plasma cargada
+    ctx.fillStyle = '#170f05';
+    ctx.fillRect(-r * 0.48, r * 0.18, r * 0.96, r * 0.44);
+    ctx.strokeStyle = '#ffaa30'; ctx.lineWidth = 0.8;
+    ctx.strokeRect(-r * 0.48, r * 0.18, r * 0.96, r * 0.44);
+
     ctx.globalCompositeOperation = 'lighter';
-    var bg = ctx.createRadialGradient(0, r * 0.5, 0, 0, r * 0.5, r * 0.3);
-    bg.addColorStop(0, 'rgba(255,220,120,' + (0.6 + 0.4 * cp) + ')'); bg.addColorStop(1, 'rgba(255,120,20,0)');
-    ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(0, r * 0.5, r * 0.3, 0, TAU); ctx.fill();
+    var bg = ctx.createRadialGradient(0, r * 0.48, 0, 0, r * 0.48, r * 0.36);
+    bg.addColorStop(0, '#ffffff');
+    bg.addColorStop(0.35, 'rgba(255,210,100,' + (0.7 + 0.3 * cp) + ')');
+    bg.addColorStop(1, 'rgba(255,110,15,0)');
+    ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(0, r * 0.48, r * 0.36, 0, TAU); ctx.fill();
     ctx.restore();
   }
-  // Francotirador: cuerpo afilado con cañón largo
+  // Francotirador: chasis furtivo con cañón de riel electromagnético
   function drawSniper(e) {
-    var r = e.r, ch = e.charge > 0, cp = 0.5 + 0.5 * Math.sin(clock * (ch ? 20 : 4) + e.ph);
+    var r = e.r, ch = e.charge > 0, cp = 0.5 + 0.5 * Math.sin(clock * (ch ? 22 : 4) + e.ph);
     ctx.save(); ctx.translate(e.x, e.y); ctx.lineJoin = 'round';
-    ctx.fillStyle = '#2a0c12'; ctx.fillRect(-r * 0.13, r * 0.2, r * 0.26, r * 1.1);
-    var hg = ctx.createLinearGradient(-r * 0.8, 0, r * 0.8, 0);
-    hg.addColorStop(0, '#4a1020'); hg.addColorStop(0.5, '#f08090'); hg.addColorStop(1, '#4a1020');
+
+    // Cañón de riel largo con bobinas magnéticas
+    ctx.fillStyle = '#1f080e';
+    ctx.fillRect(-r * 0.15, r * 0.15, r * 0.3, r * 1.18);
+    ctx.strokeStyle = 'rgba(255,120,150,0.6)'; ctx.lineWidth = 0.8;
+    ctx.strokeRect(-r * 0.15, r * 0.15, r * 0.3, r * 1.18);
+    ctx.fillStyle = ch ? '#ff6080' : '#802038';
+    for (var c = 0; c < 3; c++) {
+      ctx.fillRect(-r * 0.22, r * (0.45 + c * 0.28), r * 0.44, r * 0.1);
+    }
+
+    // Alas de diamante afiladas
+    var hg = ctx.createLinearGradient(-r * 0.95, 0, r * 0.95, 0);
+    hg.addColorStop(0, '#380918'); hg.addColorStop(0.35, '#b83254'); hg.addColorStop(0.5, '#ffb8c8'); hg.addColorStop(0.65, '#b83254'); hg.addColorStop(1, '#380918');
     ctx.fillStyle = hg;
-    ctx.beginPath(); ctx.moveTo(0, -r * 0.95); ctx.lineTo(r * 0.85, -r * 0.05); ctx.lineTo(0, r * 0.65); ctx.lineTo(-r * 0.85, -r * 0.05); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,200,210,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 1.02);
+    ctx.lineTo(r * 0.92, -r * 0.08);
+    ctx.lineTo(r * 0.32, r * 0.42);
+    ctx.lineTo(0, r * 0.72);
+    ctx.lineTo(-r * 0.32, r * 0.42);
+    ctx.lineTo(-r * 0.92, -r * 0.08);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,190,210,0.65)'; ctx.lineWidth = 1.05; ctx.stroke();
+
+    // Lente de puntería y condensador de boca
     ctx.globalCompositeOperation = 'lighter';
-    var sg = ctx.createRadialGradient(0, r * 1.3, 0, 0, r * 1.3, r * (ch ? 0.55 : 0.3));
-    sg.addColorStop(0, 'rgba(255,80,80,' + (0.5 + 0.5 * cp) + ')'); sg.addColorStop(1, 'rgba(255,40,40,0)');
-    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, r * 1.3, r * (ch ? 0.55 : 0.3), 0, TAU); ctx.fill();
-    var eg = ctx.createRadialGradient(0, -r * 0.1, 0, 0, -r * 0.1, r * 0.3);
-    eg.addColorStop(0, 'rgba(255,255,255,0.9)'); eg.addColorStop(1, 'rgba(255,60,80,0)');
-    ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.3, 0, TAU); ctx.fill();
+    var sg = ctx.createRadialGradient(0, r * 1.35, 0, 0, r * 1.35, r * (ch ? 0.62 : 0.32));
+    sg.addColorStop(0, '#ffffff');
+    sg.addColorStop(0.35, 'rgba(255,70,90,' + (0.55 + 0.45 * cp) + ')');
+    sg.addColorStop(1, 'rgba(255,30,50,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, r * 1.35, r * (ch ? 0.62 : 0.32), 0, TAU); ctx.fill();
+
+    var eg = ctx.createRadialGradient(0, -r * 0.1, 0, 0, -r * 0.1, r * 0.34);
+    eg.addColorStop(0, 'rgba(255,255,255,0.95)');
+    eg.addColorStop(0.5, 'rgba(255,80,110,0.7)');
+    eg.addColorStop(1, 'rgba(255,60,80,0)');
+    ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.34, 0, TAU); ctx.fill();
     ctx.restore();
   }
-  // Espiral: estrella giratoria
+  // Espiral: shuriken cibernético de doble giro
   function drawSpinner(e) {
     var r = e.r, i;
     ctx.save(); ctx.translate(e.x, e.y); ctx.lineJoin = 'round';
     ctx.globalCompositeOperation = 'lighter';
-    var gg = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.6);
-    gg.addColorStop(0, 'rgba(90,255,200,0.28)'); gg.addColorStop(1, 'rgba(90,255,200,0)');
-    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.6, 0, TAU); ctx.fill();
+    var gg = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.65);
+    gg.addColorStop(0, 'rgba(90,255,210,0.34)'); gg.addColorStop(1, 'rgba(90,255,210,0)');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(0, 0, r * 1.65, 0, TAU); ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
-    ctx.rotate(clock * 1.6 + e.ph);
-    ctx.fillStyle = '#2a7a6a';
+
+    ctx.rotate(clock * 1.8 + e.ph);
+    // Cuchillas curvadas tipo shuriken
     for (i = 0; i < 6; i++) {
       ctx.save(); ctx.rotate(i * TAU / 6);
-      ctx.beginPath(); ctx.moveTo(-r * 0.22, -r * 0.55); ctx.lineTo(0, -r * 1.15); ctx.lineTo(r * 0.22, -r * 0.55); ctx.closePath(); ctx.fill();
+      var bg = ctx.createLinearGradient(0, -r * 0.5, 0, -r * 1.22);
+      bg.addColorStop(0, '#164f44'); bg.addColorStop(1, '#70ffdf');
+      ctx.fillStyle = bg;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.24, -r * 0.52);
+      ctx.lineTo(-r * 0.06, -r * 1.22);
+      ctx.lineTo(r * 0.26, -r * 0.58);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(190,255,240,0.75)'; ctx.lineWidth = 0.85; ctx.stroke();
       ctx.restore();
     }
-    var hg = ctx.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.1, 0, 0, r * 0.7);
-    hg.addColorStop(0, '#d8fff4'); hg.addColorStop(0.5, '#2a8070'); hg.addColorStop(1, '#0a2a24');
+
+    // Disco central blindado
+    var hg = ctx.createRadialGradient(-r * 0.2, -r * 0.2, r * 0.08, 0, 0, r * 0.72);
+    hg.addColorStop(0, '#e6fff8'); hg.addColorStop(0.5, '#267868'); hg.addColorStop(1, '#08241e');
     ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(0, 0, r * 0.68, 0, TAU); ctx.fill();
-    ctx.strokeStyle = 'rgba(180,255,235,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = 'rgba(160,255,230,0.7)'; ctx.lineWidth = 1.1; ctx.stroke();
+
+    // Anillo interior y giroscopio luminoso
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.42, 0, TAU); ctx.stroke();
+
     ctx.globalCompositeOperation = 'lighter';
-    var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.35);
-    cg.addColorStop(0, 'rgba(255,255,255,' + (0.7 + 0.3 * Math.sin(clock * 6 + e.ph)) + ')'); cg.addColorStop(1, 'rgba(90,255,200,0)');
-    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, r * 0.35, 0, TAU); ctx.fill();
+    var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.38);
+    cg.addColorStop(0, '#ffffff');
+    cg.addColorStop(0.45, 'rgba(100,255,215,' + (0.7 + 0.3 * Math.sin(clock * 6 + e.ph)) + ')');
+    cg.addColorStop(1, 'rgba(90,255,200,0)');
+    ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(0, 0, r * 0.38, 0, TAU); ctx.fill();
     ctx.restore();
   }
 
@@ -2226,52 +2482,70 @@
     ctx.translate(e.x, e.y);
     if (e.elite) {
       ctx.globalCompositeOperation = 'lighter';
-      var eg = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 2);
-      eg.addColorStop(0, 'rgba(255,60,60,0)'); eg.addColorStop(0.6, 'rgba(255,60,60,' + (0.18 + 0.1 * Math.sin(clock * 4)) + ')'); eg.addColorStop(1, 'rgba(255,60,60,0)');
-      ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, 0, r * 2, 0, TAU); ctx.fill();
+      var eg = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 2.1);
+      eg.addColorStop(0, 'rgba(255,60,60,0)'); eg.addColorStop(0.6, 'rgba(255,60,60,' + (0.22 + 0.12 * Math.sin(clock * 4)) + ')'); eg.addColorStop(1, 'rgba(255,60,60,0)');
+      ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(0, 0, r * 2.1, 0, TAU); ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
     }
     if (b === 0) {
       [-1, 1].forEach(function (s) {
-        var pg = ctx.createLinearGradient(0, -r * 0.2, 0, r * 0.5);
-        pg.addColorStop(0, '#6b4aa3'); pg.addColorStop(1, '#1a1030');
+        // Aletas estabilizadoras y góndolas de plasma
+        ctx.fillStyle = '#381e5c';
+        ctx.beginPath(); ctx.moveTo(s * r * 0.9, -r * 0.1); ctx.lineTo(s * r * 1.48, r * 0.05); ctx.lineTo(s * r * 1.25, r * 0.35); ctx.closePath(); ctx.fill();
+        var pg = ctx.createLinearGradient(0, -r * 0.25, 0, r * 0.55);
+        pg.addColorStop(0, '#9b6ee3'); pg.addColorStop(0.6, '#482878'); pg.addColorStop(1, '#1a1030');
         ctx.fillStyle = pg;
-        ctx.beginPath(); ctx.ellipse(s * r * 1.2, r * 0.12, r * 0.2, r * 0.38, 0, 0, TAU); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(s * r * 1.2, r * 0.14, r * 0.22, r * 0.42, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,150,240,0.6)'; ctx.lineWidth = 1; ctx.stroke();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = rgba([255, 100, 220], 0.5 + 0.4 * Math.sin(clock * 6 + s));
-        ctx.beginPath(); ctx.arc(s * r * 1.2, r * 0.42, r * 0.1, 0, TAU); ctx.fill();
+        ctx.fillStyle = rgba([255, 110, 230], 0.6 + 0.4 * Math.sin(clock * 6 + s));
+        ctx.beginPath(); ctx.arc(s * r * 1.2, r * 0.46, r * 0.13, 0, TAU); ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
       });
     } else if (b === 1) {
       for (i = -1; i <= 1; i++) {
-        ctx.fillStyle = '#103a2a'; ctx.beginPath(); ctx.ellipse(i * r * 0.75, r * 0.5, r * 0.17, r * 0.42, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#0d3626';
+        ctx.beginPath(); ctx.ellipse(i * r * 0.76, r * 0.52, r * 0.19, r * 0.45, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = 'rgba(110,255,180,0.55)'; ctx.lineWidth = 1; ctx.stroke();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = rgba([120, 255, 190], 0.5 + 0.4 * Math.sin(clock * 6 + i));
-        ctx.beginPath(); ctx.arc(i * r * 0.75, r * 0.88, r * 0.09, 0, TAU); ctx.fill();
+        ctx.fillStyle = rgba([130, 255, 195], 0.6 + 0.4 * Math.sin(clock * 6 + i));
+        ctx.beginPath(); ctx.arc(i * r * 0.76, r * 0.9, r * 0.11, 0, TAU); ctx.fill();
         ctx.globalCompositeOperation = 'source-over';
       }
     } else if (b === 2) {
       [-1, 1].forEach(function (s) {
-        ctx.fillStyle = '#5a3a10'; ctx.beginPath(); ctx.ellipse(s * r * 1.2, r * 0.15, r * 0.3, r * 0.45, 0, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#ff9f1a'; ctx.beginPath(); ctx.arc(s * r * 1.2, r * 0.55, r * 0.14, 0, TAU); ctx.fill();
+        var mg = ctx.createLinearGradient(0, -r * 0.2, 0, r * 0.6);
+        mg.addColorStop(0, '#b57b28'); mg.addColorStop(1, '#3d2508');
+        ctx.fillStyle = mg;
+        ctx.beginPath(); ctx.ellipse(s * r * 1.22, r * 0.16, r * 0.32, r * 0.48, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,200,90,0.6)'; ctx.lineWidth = 1.1; ctx.stroke();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = '#ffb338';
+        ctx.beginPath(); ctx.arc(s * r * 1.22, r * 0.56, r * 0.16, 0, TAU); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
       });
     } else if (b === 3) {
-      ctx.fillStyle = '#240a0a'; ctx.fillRect(-r * 0.13, r * 0.3, r * 0.26, r * 0.95);
+      ctx.fillStyle = '#240808'; ctx.fillRect(-r * 0.15, r * 0.3, r * 0.3, r * 0.98);
+      ctx.strokeStyle = '#ff5050'; ctx.lineWidth = 1; ctx.strokeRect(-r * 0.15, r * 0.3, r * 0.3, r * 0.98);
       [-1, 1].forEach(function (s) {
-        ctx.fillStyle = '#661515';
-        ctx.beginPath(); ctx.moveTo(s * r * 0.95, -r * 0.15); ctx.lineTo(s * r * 1.65, r * 0.5); ctx.lineTo(s * r * 0.9, r * 0.4); ctx.closePath(); ctx.fill();
+        var wg = ctx.createLinearGradient(s * r * 0.8, 0, s * r * 1.7, 0);
+        wg.addColorStop(0, '#801b1b'); wg.addColorStop(1, '#ff6060');
+        ctx.fillStyle = wg;
+        ctx.beginPath(); ctx.moveTo(s * r * 0.92, -r * 0.18); ctx.lineTo(s * r * 1.7, r * 0.52); ctx.lineTo(s * r * 0.88, r * 0.42); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,180,180,0.6)'; ctx.lineWidth = 1; ctx.stroke();
       });
       ctx.globalCompositeOperation = 'lighter';
-      var sg = ctx.createRadialGradient(0, r * 1.25, 0, 0, r * 1.25, r * (ch ? 0.5 : 0.22));
-      sg.addColorStop(0, 'rgba(255,80,80,0.9)'); sg.addColorStop(1, 'rgba(255,40,40,0)');
-      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, r * 1.25, r * (ch ? 0.5 : 0.22), 0, TAU); ctx.fill();
+      var sg = ctx.createRadialGradient(0, r * 1.28, 0, 0, r * 1.28, r * (ch ? 0.55 : 0.25));
+      sg.addColorStop(0, '#ffffff'); sg.addColorStop(0.4, 'rgba(255,80,80,0.95)'); sg.addColorStop(1, 'rgba(255,40,40,0)');
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(0, r * 1.28, r * (ch ? 0.55 : 0.25), 0, TAU); ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
     } else {
-      ctx.rotate(clock * 1.2);
-      ctx.fillStyle = '#2a7a98';
+      ctx.rotate(clock * 1.3);
       for (i = 0; i < 8; i++) {
         ctx.save(); ctx.rotate(i * TAU / 8);
-        ctx.beginPath(); ctx.moveTo(-r * 0.12, -r * 1.1); ctx.lineTo(0, -r * 1.5); ctx.lineTo(r * 0.12, -r * 1.1); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#2889ab';
+        ctx.beginPath(); ctx.moveTo(-r * 0.14, -r * 1.08); ctx.lineTo(0, -r * 1.54); ctx.lineTo(r * 0.14, -r * 1.08); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(160,240,255,0.75)'; ctx.lineWidth = 0.9; ctx.stroke();
         ctx.restore();
       }
     }
@@ -2347,93 +2621,106 @@
 
   function drawSplitter(e) {
     var r = e.r, cp = 0.5 + 0.5 * Math.sin(clock * 6 + e.ph);
+    var sep = r * (0.44 + 0.05 * Math.sin(clock * 8 + e.ph));
     ctx.save();
     ctx.translate(e.x, e.y);
     ctx.lineJoin = 'round';
 
     ctx.globalCompositeOperation = 'lighter';
-    var gg = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.5);
-    gg.addColorStop(0, 'rgba(100,255,180,0.28)');
+    var gg = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.55);
+    gg.addColorStop(0, 'rgba(100,255,180,0.32)');
     gg.addColorStop(1, 'rgba(100,255,180,0)');
     ctx.fillStyle = gg;
     ctx.beginPath();
-    ctx.arc(0, 0, r * 1.5, 0, TAU);
+    ctx.arc(0, 0, r * 1.55, 0, TAU);
     ctx.fill();
+
+    // Arco voltaico mitótico entre los dos lóbulos
+    ctx.strokeStyle = 'rgba(190,255,235,' + (0.55 + 0.45 * Math.sin(clock * 16)) + ')';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-sep, -r * 0.2);
+    ctx.quadraticCurveTo(0, r * 0.25 * Math.sin(clock * 20), sep, -r * 0.2);
+    ctx.moveTo(-sep, r * 0.2);
+    ctx.quadraticCurveTo(0, -r * 0.25 * Math.cos(clock * 18), sep, r * 0.2);
+    ctx.stroke();
     ctx.globalCompositeOperation = 'source-over';
 
     [-1, 1].forEach(function(s) {
-      var ox = s * r * 0.45;
-      var cg = ctx.createLinearGradient(ox, -r * 0.8, ox, r * 0.8);
-      cg.addColorStop(0, '#c2ffe0');
-      cg.addColorStop(0.5, '#1da36d');
-      cg.addColorStop(1, '#093d27');
+      var ox = s * sep;
+      var cg = ctx.createLinearGradient(ox - s * r * 0.3, -r * 0.85, ox + s * r * 0.3, r * 0.85);
+      cg.addColorStop(0, '#d8ffec');
+      cg.addColorStop(0.45, '#22b87a');
+      cg.addColorStop(1, '#083823');
       ctx.fillStyle = cg;
       ctx.beginPath();
-      ctx.ellipse(ox, 0, r * 0.42, r * 0.82, s * 0.1, 0, TAU);
+      ctx.ellipse(ox, 0, r * 0.43, r * 0.84, s * 0.12, 0, TAU);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(180,255,220,0.6)';
+      ctx.strokeStyle = 'rgba(190,255,225,0.75)';
       ctx.lineWidth = 1.2;
       ctx.stroke();
 
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = 'rgba(160,255,210,' + (0.5 + 0.5 * cp) + ')';
+      // Aleta lateral bio-mecánica
+      ctx.fillStyle = '#0d4f33';
       ctx.beginPath();
-      ctx.arc(ox, -r * 0.1, r * 0.18, 0, TAU);
+      ctx.moveTo(ox + s * r * 0.35, -r * 0.3);
+      ctx.lineTo(ox + s * r * 0.72, r * 0.1);
+      ctx.lineTo(ox + s * r * 0.3, r * 0.4);
+      ctx.closePath();
+      ctx.fill();
+
+      // Núcleo celular brillante
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(220,255,240,' + (0.65 + 0.35 * cp) + ')';
+      ctx.beginPath();
+      ctx.arc(ox, -r * 0.08, r * 0.2, 0, TAU);
       ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
     });
-
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = 'rgba(180,255,230,' + (0.4 + 0.5 * Math.sin(clock * 14)) + ')';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(-r * 0.35, 0);
-    ctx.lineTo(r * 0.35, 0);
-    ctx.stroke();
-    ctx.globalCompositeOperation = 'source-over';
 
     ctx.restore();
   }
 
   function drawSplitterMini(e) {
-    var r = e.r, fl = r * (0.6 + Math.random() * 0.4);
+    var r = e.r, fl = r * (0.65 + Math.random() * 0.45);
     ctx.save();
     ctx.translate(e.x, e.y);
     ctx.lineJoin = 'round';
 
     ctx.globalCompositeOperation = 'lighter';
     var fg = ctx.createLinearGradient(0, -r * 0.5, 0, -r * 0.5 - fl);
-    fg.addColorStop(0, 'rgba(140,255,200,0.9)');
+    fg.addColorStop(0, 'rgba(220,255,240,0.95)');
+    fg.addColorStop(0.4, 'rgba(100,255,180,0.8)');
     fg.addColorStop(1, 'rgba(40,200,120,0)');
     ctx.fillStyle = fg;
     ctx.beginPath();
-    ctx.moveTo(-r * 0.3, -r * 0.5);
+    ctx.moveTo(-r * 0.32, -r * 0.5);
     ctx.lineTo(0, -r * 0.5 - fl);
-    ctx.lineTo(r * 0.3, -r * 0.5);
+    ctx.lineTo(r * 0.32, -r * 0.5);
     ctx.closePath();
     ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
-    var hg = ctx.createLinearGradient(-r, 0, r, 0);
-    hg.addColorStop(0, '#0c4028');
-    hg.addColorStop(0.5, '#7ff5c0');
-    hg.addColorStop(1, '#0c4028');
+    var hg = ctx.createLinearGradient(-r * 0.9, 0, r * 0.9, 0);
+    hg.addColorStop(0, '#0a3b24');
+    hg.addColorStop(0.5, '#88ffca');
+    hg.addColorStop(1, '#0a3b24');
     ctx.fillStyle = hg;
     ctx.beginPath();
-    ctx.moveTo(0, r * 1.1);
-    ctx.lineTo(r * 0.85, -r * 0.6);
-    ctx.lineTo(0, -r * 0.2);
-    ctx.lineTo(-r * 0.85, -r * 0.6);
+    ctx.moveTo(0, r * 1.15);
+    ctx.lineTo(r * 0.88, -r * 0.58);
+    ctx.lineTo(0, -r * 0.22);
+    ctx.lineTo(-r * 0.88, -r * 0.58);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(200,255,230,0.6)';
+    ctx.strokeStyle = 'rgba(210,255,235,0.75)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
     ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.22, 0, TAU);
+    ctx.arc(0, 0.05 * r, r * 0.24, 0, TAU);
     ctx.fill();
     ctx.restore();
   }
@@ -2442,69 +2729,110 @@
     var r = e.r;
     var pal = (e.mbt || 0) % 3;
     var colMain = pal === 0 ? '#ff4080' : (pal === 1 ? '#00e5ff' : '#ffaa30');
-    var colDark = pal === 0 ? '#4a0b22' : (pal === 1 ? '#0b354a' : '#4a2c0b');
+    var colDark = pal === 0 ? '#3d081c' : (pal === 1 ? '#082c3d' : '#3d2208');
     var rgb = pal === 0 ? [255, 64, 128] : (pal === 1 ? [0, 229, 255] : [255, 170, 48]);
 
     ctx.save();
     ctx.translate(e.x, e.y);
     ctx.lineJoin = 'round';
 
+    // Aura de reactor y propulsores traseros
     ctx.globalCompositeOperation = 'lighter';
-    var eg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.7);
-    eg.addColorStop(0, 'rgba(' + rgb.join(',') + ', 0.35)');
+    var eg = ctx.createRadialGradient(0, 0, r * 0.35, 0, 0, r * 1.8);
+    eg.addColorStop(0, 'rgba(' + rgb.join(',') + ', 0.4)');
     eg.addColorStop(1, 'rgba(' + rgb.join(',') + ', 0)');
     ctx.fillStyle = eg;
     ctx.beginPath();
-    ctx.arc(0, 0, r * 1.7, 0, TAU);
+    ctx.arc(0, 0, r * 1.8, 0, TAU);
     ctx.fill();
+
+    var fl = r * (0.45 + Math.random() * 0.25);
+    [-0.38, 0.38].forEach(function(sx) {
+      var tf = ctx.createLinearGradient(0, -r * 0.75, 0, -r * 0.75 - fl);
+      tf.addColorStop(0, '#ffffff');
+      tf.addColorStop(0.4, colMain);
+      tf.addColorStop(1, 'rgba(' + rgb.join(',') + ',0)');
+      ctx.fillStyle = tf;
+      ctx.beginPath();
+      ctx.moveTo(sx * r - r * 0.14, -r * 0.72);
+      ctx.lineTo(sx * r, -r * 0.72 - fl);
+      ctx.lineTo(sx * r + r * 0.14, -r * 0.72);
+      ctx.closePath();
+      ctx.fill();
+    });
     ctx.globalCompositeOperation = 'source-over';
 
+    // Alas pesadas articuladas y torretas dobles
     [-1, 1].forEach(function(s) {
-      ctx.fillStyle = colDark;
-      ctx.strokeStyle = colMain;
-      ctx.lineWidth = 1.5;
+      var wg = ctx.createLinearGradient(s * r * 0.25, 0, s * r * 1.35, 0);
+      wg.addColorStop(0, colMain);
+      wg.addColorStop(1, colDark);
+      ctx.fillStyle = wg;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.3;
       ctx.beginPath();
-      ctx.moveTo(s * r * 0.3, -r * 0.4);
-      ctx.lineTo(s * r * 1.25, r * 0.15);
-      ctx.lineTo(s * r * 0.85, r * 0.7);
-      ctx.lineTo(s * r * 0.25, r * 0.5);
+      ctx.moveTo(s * r * 0.3, -r * 0.48);
+      ctx.lineTo(s * r * 1.32, r * 0.08);
+      ctx.lineTo(s * r * 1.12, r * 0.58);
+      ctx.lineTo(s * r * 0.75, r * 0.72);
+      ctx.lineTo(s * r * 0.28, r * 0.48);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#111622';
-      ctx.fillRect(s * r * 0.95 - 3, r * 0.2, 6, 12);
+      // Baterías de cañones en las alas
+      ctx.fillStyle = '#0e131d';
+      ctx.fillRect(s * r * 0.92 - 3.5, r * 0.25, 7, 14);
+      ctx.fillRect(s * r * 0.62 - 3, r * 0.38, 6, 12);
       ctx.fillStyle = colMain;
-      ctx.fillRect(s * r * 0.95 - 2, r * 0.45, 4, 4);
+      ctx.fillRect(s * r * 0.92 - 2, r * 0.52, 4, 4);
+      ctx.fillRect(s * r * 0.62 - 2, r * 0.6, 4, 4);
     });
 
-    var hg = ctx.createLinearGradient(0, -r * 0.9, 0, r * 0.9);
+    // Casco central acorazado
+    var hg = ctx.createLinearGradient(0, -r * 0.95, 0, r * 0.95);
     hg.addColorStop(0, '#ffffff');
-    hg.addColorStop(0.3, colMain);
-    hg.addColorStop(1, colDark);
+    hg.addColorStop(0.28, colMain);
+    hg.addColorStop(0.85, colDark);
+    hg.addColorStop(1, '#090c14');
     ctx.fillStyle = hg;
     ctx.beginPath();
-    ctx.moveTo(0, r * 0.95);
-    ctx.lineTo(r * 0.55, r * 0.2);
-    ctx.lineTo(r * 0.45, -r * 0.7);
-    ctx.lineTo(0, -r * 0.95);
-    ctx.lineTo(-r * 0.45, -r * 0.7);
-    ctx.lineTo(-r * 0.55, r * 0.2);
+    ctx.moveTo(0, r * 1.02);
+    ctx.lineTo(r * 0.58, r * 0.22);
+    ctx.lineTo(r * 0.48, -r * 0.72);
+    ctx.lineTo(0, -r * 0.96);
+    ctx.lineTo(-r * 0.48, -r * 0.72);
+    ctx.lineTo(-r * 0.58, r * 0.22);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1.6;
     ctx.stroke();
 
+    // Líneas de blindaje interior
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.75); ctx.lineTo(0, r * 0.8);
+    ctx.moveTo(-r * 0.42, -r * 0.15); ctx.lineTo(r * 0.42, -r * 0.15);
+    ctx.stroke();
+
+    // Anillo de energía giratorio y núcleo del minijefe
     ctx.globalCompositeOperation = 'lighter';
     var cp = 0.6 + 0.4 * Math.sin(clock * 8 + (e.ph || 0));
-    var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.38);
-    cg.addColorStop(0, 'rgba(255,255,255,0.95)');
-    cg.addColorStop(0.5, 'rgba(' + rgb.join(',') + ',' + cp + ')');
+    ctx.strokeStyle = 'rgba(255,255,255,' + (0.5 * cp) + ')';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.42, clock * 3, clock * 3 + Math.PI * 1.3);
+    ctx.stroke();
+
+    var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.4);
+    cg.addColorStop(0, 'rgba(255,255,255,0.98)');
+    cg.addColorStop(0.45, 'rgba(' + rgb.join(',') + ',' + cp + ')');
     cg.addColorStop(1, 'rgba(' + rgb.join(',') + ',0)');
     ctx.fillStyle = cg;
     ctx.beginPath();
-    ctx.arc(0, 0, r * 0.38, 0, TAU);
+    ctx.arc(0, 0, r * 0.4, 0, TAU);
     ctx.fill();
 
     ctx.restore();
@@ -3810,6 +4138,11 @@
     _testHook.nextStage = nextStage;
     _testHook.killEnemy = killEnemy;
     _testHook.destroyAsteroid = destroyAsteroid;
+    _testHook.drawShip = drawShip;
+    _testHook.drawEnemy = drawEnemy;
+    _testHook.openMap = openMap;
+    _testHook.drawMap = drawMap;
+    _testHook.getMap = function () { return { state: state, mapSel: mapSel, prog: prog, mapNote: mapNote }; };
   }
 
   // ---------- Bucle ----------
