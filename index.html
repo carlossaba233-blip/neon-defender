@@ -347,6 +347,22 @@
   ];
   var ELS = [0,1,4,5,1,6,5,2,3,0,1,2,4,5,2,6, 1,4,0,3,4,5,1,2,3,1,6,5, 2,1,4,5,3,6,5,6,0,3,5,0];
   SHIPS.forEach(function (S, i) { S.el = ELS[i] || 0; });
+  // ---------- Habilidades activas: cada nave trae una, con enfriamiento propio ----------
+  // cd = enfriamiento base (s), dur = duración base (s). La rareza de la nave acorta el enfriamiento y alarga la duración.
+  var AB = [
+    { n: 'Impulso', ic: '💨', rgb: '140,230,255', cd: 3.5, dur: 0.2, desc: 'Esquiva veloz con invulnerabilidad; daña a quien atraviesas.' },
+    { n: 'Pulso EMP', ic: '💥', rgb: '255,230,120', cd: 22, dur: 0, desc: 'Bomba de pantalla: borra todas las balas y daña a todos los enemigos.' },
+    { n: 'Espejo', ic: '🛡', rgb: '200,220,255', cd: 13, dur: 3, desc: 'Escudo reflectante: devuelve las balas enemigas como disparos tuyos.' },
+    { n: 'Sobrecarga', ic: '⚡', rgb: '255,90,200', cd: 14, dur: 4.5, desc: 'Cadencia de disparo más del doble de rápida durante unos segundos.' },
+    { n: 'Crono', ic: '⏳', rgb: '170,140,255', cd: 18, dur: 4, desc: 'Ralentiza enemigos y sus balas al 35 % durante unos segundos.' },
+    { n: 'Enjambre', ic: '🚀', rgb: '255,160,70', cd: 8, dur: 0, desc: 'Lanza una salva de 10 misiles teledirigidos de tu elemento.' }
+  ];
+  var ABS = [0,5,0,2,3,1,4,0,3,0,2,4,2,4,1,1, 3,2,0,1,5,4,5,0,3,5,2,4, 2,3,5,4,1,2,4,0,1,5,4,1];
+  SHIPS.forEach(function (S, i) { S.ab = ABS[i] !== undefined ? ABS[i] : 0; });
+  function abCd(S) { return +(AB[S.ab].cd * (1 - 0.07 * S.rar)).toFixed(1); }
+  function abDur(S) { return +(AB[S.ab].dur * (1 + 0.1 * S.rar)).toFixed(2); }
+  function shipOf(P) { return SHIPS[sel[P.id] || 0]; }
+  function abOf(P) { return shipOf(P).ab; }
   var zaps = [];
   function elOf(P) { return SHIPS[sel[P.id] || 0].el; }
   function ELC(P) { return 'rgb(' + EL[elOf(P)].rgb + ')'; }
@@ -400,10 +416,10 @@
   }
   function dur(k) { return k === 'sh' ? 8 + 2 * up.sh : (k === 'rf' ? 8 + 2 * up.rf : 10 + 3 * up.c2); }
   try { muted = localStorage.getItem('nd_muted') === '1'; } catch (e) {}
-  function newKeys() { return { left: false, right: false, up: false, down: false, fire: false }; }
+  function newKeys() { return { left: false, right: false, up: false, down: false, fire: false, ab: false }; }
   var keyState = [newKeys(), newKeys()];
   var padState = [{ x: 0, y: 0, fire: false }, { x: 0, y: 0, fire: false }];
-  function clearKeys() { for (var i = 0; i < 2; i++) { var k = keyState[i]; k.left = k.right = k.up = k.down = k.fire = false; } mouseFire = false; tch = null; }
+  function clearKeys() { for (var i = 0; i < 2; i++) { var k = keyState[i]; k.left = k.right = k.up = k.down = k.fire = k.ab = false; } mouseFire = false; tch = null; }
   var mouseT = null, mouseFire = false;
   flash = 0; shake = 0; particles = []; enemies = []; pBullets = []; eBullets = []; powerups = [];
   curP = { cols: 5, rows: 2, bs: 226, fireInt: 1.2, shooters: 1, sway: 0.6 };
@@ -731,7 +747,7 @@
 
   function makePlayer(i, n) {
     var px = n === 2 ? (i === 0 ? W * 0.33 : W * 0.67) : W / 2;
-    return { id: i, x: px, y: H - 110, vx: 0, vy: 0, r: 16, hitR: 8, bank: 0, alive: true, score: 0, lives: 3 + up.life, weapon: cheat.wpn ? 6 : 1 + up.wpn, shieldT: 0, shieldMax: 8, rfT: 0, rfMax: 8, c2T: 0, c2Max: 10, superT: 0, supCd: 0, supAng: 0, invT: 1.5, fireCd: 0.3, keys: keyState[i], pad: padState[i] };
+    return { id: i, x: px, y: H - 110, vx: 0, vy: 0, r: 16, hitR: 8, bank: 0, alive: true, score: 0, lives: 3 + up.life, weapon: cheat.wpn ? 6 : 1 + up.wpn, shieldT: 0, shieldMax: 8, rfT: 0, rfMax: 8, c2T: 0, c2Max: 10, superT: 0, supCd: 0, supAng: 0, invT: 1.5, fireCd: 0.3, abCd: 1.5, abT: 0, abInv: 0, dashT: 0, dashVx: 0, dashVy: 0, trail: [], keys: keyState[i], pad: padState[i] };
   }
   function totalScore() { var t = 0; for (var i = 0; i < players.length; i++) t += players[i].score; return t; }
   function anyAlive() { for (var i = 0; i < players.length; i++) if (players[i].alive) return true; return false; }
@@ -765,6 +781,7 @@
       }
     }
     enemies = []; eBullets = []; asteroids = []; diveT = 3.5; vacOn = false;
+    keyState[0].ab = keyState[1].ab = false;
     for (var q2 = 0; q2 < players.length; q2++) { var R2 = players[q2]; if (R2.exitV > 0) { R2.exitV = 0; R2.y = H + 60; R2.enterT = 0.9; R2.invT = 2; R2.vx = R2.vy = 0; } }
     speed = 240 + L * 12;
     curP = params(L); curP.boss = !!boss; curP.c0 = runCoins; curP.g0 = runGems;
@@ -1382,7 +1399,7 @@
   }
   function hurtPlayer(P) {
     if (cheat.god || (typeof __ND_TEST !== 'undefined' && __ND_TEST.god)) return;
-    if (!P.alive || P.invT > 0 || P.superT > 0 || state !== 'playing') return;
+    if (!P.alive || P.invT > 0 || P.abInv > 0 || P.superT > 0 || state !== 'playing') return;
     if (P.shieldT > 0) {
       P.shieldT = 0; P.invT = 0.8;
       addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.45, maxR: 60, col: [0, 229, 255] });
@@ -1435,6 +1452,90 @@
     else if (el === 5) for (sa = 0; sa < 8; sa++) pShot(x, y, P.supAng + sa * TAU / 8, P, { el: 5, sp: 520, home: 7 });
     else { for (k = 0; k < enemies.length; k++) { e = enemies[k]; if (e.y < y && e.y > 0 && Math.abs(e.x - x) < 34 + e.r * 0.7) { e.hp -= e.kind === 'boss' ? 0.5 : 1; e.hit = 0.05; e.lastO = P; } } pShot(x, y, -0.4, P, { el: 6, sp: 1400, pierce: 99 }); pShot(x, y, 0.4, P, { el: 6, sp: 1400, pierce: 99 }); }
   }
+  // ---------- Habilidad activa de la nave ----------
+  function slowF() {
+    for (var i = 0; i < players.length; i++) { var P = players[i]; if (P.alive && P.abT > 0 && abOf(P) === 4) return 0.35; }
+    return 1;
+  }
+  function useAbility(P) {
+    if (!P || !P.alive || state !== 'playing' || P.abCd > 0 || P.enterT > 0 || P.exitV > 0 || clearing) return false;
+    var S = shipOf(P), id = S.ab, A = AB[id], rgb = A.rgb.split(',').map(Number), el = S.el, k, e, dx, dy, dl;
+    P.abCd = abCd(S); P.abMax = P.abCd;
+    if (id === 0) {
+      // Impulso: dirección del movimiento (o de la velocidad); si no hay, hacia donde se inclina la nave
+      var K = P.keys, pd = P.pad || { x: 0, y: 0 };
+      dx = (K.right ? 1 : 0) - (K.left ? 1 : 0) + pd.x; dy = (K.down ? 1 : 0) - (K.up ? 1 : 0) + pd.y;
+      if (!dx && !dy) { dx = Math.abs(P.vx) > 40 ? P.vx : (P.x < W / 2 ? 1 : -1); dy = Math.abs(P.vy) > 40 ? P.vy * 0.5 : 0; }
+      dl = Math.sqrt(dx * dx + dy * dy) || 1;
+      P.dashT = abDur(S); P.dashVx = dx / dl * 1800; P.dashVy = dy / dl * 1800;
+      P.abInv = P.dashT + 0.3; P.trail = [];
+      sweep(300, 1400, 0.16, 'sawtooth', 0.04);
+    } else if (id === 1) {
+      // Pulso EMP: barre balas y daña a todos los enemigos en pantalla
+      P.abInv = 0.6; shake = 0.55; flash = 0.45; explosionSound(1.1);
+      sweep(900, 60, 0.5, 'square', 0.05);
+      addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.7, maxR: Math.max(W, H) * 1.1, col: rgb });
+      addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.45, maxR: Math.max(W, H) * 0.6, col: [255, 255, 255] });
+      for (k = 0; k < eBullets.length; k++) sparksAt(eBullets[k].x, eBullets[k].y, 2, rgb);
+      eBullets = [];
+      for (k = enemies.length - 1; k >= 0; k--) {
+        e = enemies[k]; if (e.y < -20) continue;
+        e.hp -= (e.kind === 'boss' || e.kind === 'miniboss') ? 6 : 4; e.hit = 0.25; e.lastO = P;
+        zaps.push({ x1: P.x, y1: P.y, x2: e.x, y2: e.y, t: 0.12 });
+        if (e.hp <= 0) killEnemy(k, P);
+      }
+      for (k = 0; k < asteroids.length; k++) { asteroids[k].hp -= 3; asteroids[k].hit = 0.1; }
+      for (k = asteroids.length - 1; k >= 0; k--) if (asteroids[k].hp <= 0) destroyAsteroid(k, P);
+    } else if (id === 2) {
+      P.abT = abDur(S);
+      tone(880, 0.12, 'triangle', 0.05, 0); tone(1320, 0.18, 'triangle', 0.04, 0.06);
+      addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.4, maxR: 70, col: rgb });
+    } else if (id === 3) {
+      P.abT = abDur(S);
+      sweep(200, 1200, 0.3, 'square', 0.04);
+      addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.4, maxR: 60, col: rgb });
+    } else if (id === 4) {
+      P.abT = abDur(S);
+      sweep(1200, 180, 0.6, 'sine', 0.06);
+      addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.8, maxR: Math.max(W, H), col: rgb });
+    } else {
+      // Enjambre: salva de misiles teledirigidos con el elemento de la nave
+      for (k = 0; k < 10; k++) pShot(P.x + (k - 4.5) * 4, P.y - 10, (k - 4.5) * 0.24, P, { el: el, sp: 470, r: 5, home: 9, dmg: 2 });
+      tone(420, 0.06, 'sawtooth', 0.04, 0); tone(560, 0.06, 'sawtooth', 0.04, 0.05); tone(700, 0.08, 'sawtooth', 0.04, 0.1);
+      sparksAt(P.x, P.y - 14, 12, rgb);
+    }
+    return true;
+  }
+  // Efectos por fotograma de la habilidad (Impulso en movimiento, Espejo reflejando, temporizadores)
+  function abilityTick(P, dt) {
+    var S = shipOf(P), id = S.ab, k, b, dx, dy, sp, a;
+    if (P.abCd > 0) {
+      P.abCd -= dt;
+      if (P.abCd <= 0) { P.abCd = 0; tone(1320, 0.05, 'triangle', 0.03, 0); tone(1760, 0.07, 'triangle', 0.03, 0.05); addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.35, maxR: 34, col: AB[id].rgb.split(',').map(Number) }); }
+    }
+    if (P.abInv > 0) P.abInv -= dt;
+    if (P.abT > 0) P.abT -= dt;
+    for (k = P.trail.length - 1; k >= 0; k--) { P.trail[k].a -= dt * 3.5; if (P.trail[k].a <= 0) P.trail.splice(k, 1); }
+    if (P.dashT > 0) {
+      P.dashT -= dt;
+      P.trail.push({ x: P.x, y: P.y, b: P.bank, a: 0.7 });
+      P.vx = P.dashVx * 0.3; P.vy = P.dashVy * 0.3;
+      P.x = Math.max(P.r, Math.min(W - P.r, P.x + P.dashVx * dt));
+      P.y = Math.max(H * 0.6, Math.min(H - 40, P.y + P.dashVy * dt));
+    }
+    if (id === 2 && P.abT > 0) {
+      for (k = eBullets.length - 1; k >= 0; k--) {
+        b = eBullets[k]; dx = b.x - P.x; dy = b.y - P.y;
+        if (dx * dx + dy * dy < 46 * 46) {
+          sp = Math.sqrt(b.vx * b.vx + b.vy * b.vy) || 1;
+          a = Math.atan2(-b.vx / sp, b.vy / sp) + (Math.random() - 0.5) * 0.3;
+          eBullets.splice(k, 1);
+          pShot(b.x, b.y, a, P, { el: S.el, sp: 720, r: 5, dmg: 2 });
+          sparksAt(b.x, b.y, 4, [220, 235, 255]);
+        }
+      }
+    }
+  }
   function playerShoot(P) {
     var k = P.r / 16 * 1.1, y = P.y - 24 * k, x = P.x, el = elOf(P), lv = Math.min(6, P.weapon), i, a, o;
     var n = [[1,2,3,4,5,7],[1,2,2,3,3,4],[1,2,3,3,5,5],[1,2,2,3,3,4],[1,2,3,3,4,5],[1,2,2,3,4,5],[1,1,2,2,3,3]][el][lv - 1];
@@ -1485,6 +1586,7 @@
     if (P.x > W - P.r) { P.x = W - P.r; P.vx = -Math.abs(P.vx) * 0.25; }
     if (P.y < yMin) { P.y = yMin; P.vy = Math.abs(P.vy) * 0.25; }
     if (P.y > yMax) { P.y = yMax; P.vy = -Math.abs(P.vy) * 0.25; }
+    abilityTick(P, dt);
     var bankT = Math.max(-0.42, Math.min(0.42, P.vx * 0.0009));
     P.bank += (bankT - P.bank) * Math.min(1, dt * 10);
     if (P.invT > 0) P.invT -= dt;
@@ -1504,7 +1606,8 @@
         life: 0.25 + Math.random() * 0.2, size: 3.4 * k
       });
     }
-    if ((K.fire || pd.fire || (one && (mouseFire || touchMode))) && P.fireCd <= 0) { playerShoot(P); P.fireCd = EL[elOf(P)].cd * (P.rfT > 0 ? 0.53 : 1); }
+    if ((K.fire || pd.fire || (one && (mouseFire || touchMode))) && P.fireCd <= 0) { playerShoot(P); P.fireCd = EL[elOf(P)].cd * (P.rfT > 0 ? 0.53 : 1) * (P.abT > 0 && abOf(P) === 3 ? 0.45 : 1); }
+    if (K.ab) { K.ab = false; if (!useAbility(P) && P.abCd > 0) tone(150, 0.06, 'square', 0.025, 0); }
   }
 
   function update(dt) {
@@ -1512,9 +1615,11 @@
     if (levelT > 0) levelT -= dt;
     for (q = 0; q < players.length; q++) updatePlayer(players[q], dt);
 
-    formationStep(dt, true);
-    updateAsteroids(dt);
-    enemyFireT -= dt;
+    // Crono: el tiempo de los enemigos (movimiento, disparo y balas) corre más lento
+    var edt = dt * slowF();
+    formationStep(edt, true);
+    updateAsteroids(edt);
+    enemyFireT -= edt;
     if (enemyFireT <= 0 && !clearing) {
       enemyFireT = curP.fireInt * (0.6 + Math.random() * 0.8);
       var shooters = pickShooters();
@@ -1528,7 +1633,7 @@
       e = enemies[j];
       if (e.dying) { explode(e.x, e.y, 0.5); enemies.splice(j, 1); continue; }
       if (e.charge > 0) {
-        e.charge -= dt;
+        e.charge -= edt;
         if (e.charge > 0.25) { P = nearestPlayer(e.x, e.y); e.aim = Math.atan2(P.y - e.y, P.x - e.x); }
         if (e.charge <= 0) {
           e.charge = 0;
@@ -1543,13 +1648,13 @@
         }
       }
       if (e.kind === 'drone' && !e.free && !e.dive && e.entered) {
-        e.droneT = (e.droneT === undefined ? 2 : e.droneT) - dt;
+        e.droneT = (e.droneT === undefined ? 2 : e.droneT) - edt;
         if (e.droneT <= 0) { beginDive(e, 380 + level * 6); sweep(800, 300, 0.2, 'sawtooth', 0.025); }
       }
     }
 
     if (!clearing && level >= 2 && !curP.boss) {
-      diveT -= dt;
+      diveT -= edt;
       if (diveT <= 0) { diveT = Math.max(2.2, 6.5 - level * 0.25) * (0.7 + Math.random() * 0.6); startDive(); }
     }
 
@@ -1608,9 +1713,9 @@
     for (i = eBullets.length - 1; i >= 0; i--) {
       b = eBullets[i];
       if (!b) continue;
-      if (b.sw) { b.t = (b.t || 0) + dt; b.x += Math.cos(b.t * 7) * b.sw * 7 * dt; }
-      if (b.fuse !== undefined) { b.fuse -= dt; if (b.fuse <= 0) { bombBurst(b); eBullets.splice(i, 1); continue; } }
-      b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.sw) { b.t = (b.t || 0) + edt; b.x += Math.cos(b.t * 7) * b.sw * 7 * edt; }
+      if (b.fuse !== undefined) { b.fuse -= edt; if (b.fuse <= 0) { bombBurst(b); eBullets.splice(i, 1); continue; } }
+      b.x += b.vx * edt; b.y += b.vy * edt;
       if (b.y > H + 30 || b.y < -30 || b.x < -30 || b.x > W + 30) { eBullets.splice(i, 1); continue; }
       if (asteroids.length) {
         var astHit = false;
@@ -1630,7 +1735,7 @@
       }
       for (q = 0; q < players.length; q++) {
         P = players[q];
-        if (!P.alive || P.invT > 0) continue;
+        if (!P.alive || P.invT > 0 || P.abInv > 0) continue;
         ddx = b.x - P.x; ddy = b.y - P.y; rr = b.r + P.hitR;
         if (ddx * ddx + ddy * ddy < rr * rr) {
           eBullets.splice(i, 1);
@@ -1650,6 +1755,14 @@
         if (!P.alive) continue;
         ddx = P.x - e.x; ddy = P.y - e.y; rr = e.r * 0.8 + P.hitR;
         if (ddx * ddx + ddy * ddy < rr * rr) {
+          // Impulso: atravesar a un enemigo le hace daño en lugar de dañarte a ti
+          if (P.dashT > 0 || P.abInv > 0) {
+            if (P.dashT > 0 && !(e.dashHit > clock)) {
+              e.hp -= (e.kind === 'boss' || e.kind === 'miniboss') ? 2 : 4; e.hit = 0.15; e.lastO = P; e.dashHit = clock + 0.35;
+              sparksAt(e.x, e.y, 10, [140, 230, 255]); hitSound();
+            }
+            continue;
+          }
           hurtPlayer(P);
           if (state !== 'playing') return;
           if (e.dive) { explode(e.x, e.y, 0.6); explosionSound(0.6); enemies.splice(j, 1); j--; break; }
@@ -2977,6 +3090,91 @@
     ctx.globalCompositeOperation = 'source-over';
   }
 
+  // ---------- Efectos visuales de las habilidades ----------
+  function drawAbilityFx(P) {
+    var id = abOf(P), i, a, R, g, rgb = AB[id].rgb;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (P.dashT > 0 || (id === 0 && P.abInv > 0)) {
+      R = 26 + Math.sin(clock * 30) * 2;
+      ctx.strokeStyle = 'rgba(' + rgb + ',0.75)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(P.x, P.y, R, 0, TAU); ctx.stroke();
+    }
+    if (id === 2 && P.abT > 0 && !(P.abT < 0.6 && Math.floor(P.abT * 14) % 2 === 0)) {
+      // Espejo: hexágono cristalino giratorio
+      R = 44;
+      g = ctx.createRadialGradient(P.x, P.y, R * 0.55, P.x, P.y, R);
+      g.addColorStop(0, 'rgba(200,220,255,0)'); g.addColorStop(1, 'rgba(200,220,255,0.35)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      for (i = 0; i < 6; i++) { a = clock * 1.5 + i * TAU / 6; ctx.lineTo(P.x + Math.cos(a) * R, P.y + Math.sin(a) * R); }
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(235,245,255,0.9)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = 'rgba(150,190,255,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (i = 0; i < 6; i++) { a = -clock * 2 + i * TAU / 6; ctx.lineTo(P.x + Math.cos(a) * R * 0.78, P.y + Math.sin(a) * R * 0.78); }
+      ctx.closePath(); ctx.stroke();
+    }
+    if (id === 3 && P.abT > 0) {
+      // Sobrecarga: aura magenta con chispas eléctricas
+      R = 30 + Math.sin(clock * 20) * 3;
+      g = ctx.createRadialGradient(P.x, P.y, 6, P.x, P.y, R);
+      g.addColorStop(0, 'rgba(255,90,200,0.35)'); g.addColorStop(1, 'rgba(255,90,200,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(P.x, P.y, R, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,170,230,0.85)'; ctx.lineWidth = 1.4;
+      for (i = 0; i < 3; i++) {
+        a = Math.random() * TAU; var r1 = 14 + Math.random() * 6, r2 = 24 + Math.random() * 8;
+        ctx.beginPath(); ctx.moveTo(P.x + Math.cos(a) * r1, P.y + Math.sin(a) * r1);
+        ctx.lineTo(P.x + Math.cos(a + 0.25) * (r1 + r2) / 2, P.y + Math.sin(a + 0.25) * (r1 + r2) / 2);
+        ctx.lineTo(P.x + Math.cos(a - 0.1) * r2, P.y + Math.sin(a - 0.1) * r2); ctx.stroke();
+      }
+    }
+    if (id === 4 && P.abT > 0) {
+      // Crono: esfera de reloj con manecilla
+      R = 36;
+      ctx.strokeStyle = 'rgba(' + rgb + ',0.7)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(P.x, P.y, R, 0, TAU); ctx.stroke();
+      for (i = 0; i < 12; i++) { a = i * TAU / 12; ctx.beginPath(); ctx.moveTo(P.x + Math.cos(a) * (R - 4), P.y + Math.sin(a) * (R - 4)); ctx.lineTo(P.x + Math.cos(a) * R, P.y + Math.sin(a) * R); ctx.stroke(); }
+      a = -Math.PI / 2 + clock * 3;
+      ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(P.x, P.y); ctx.lineTo(P.x + Math.cos(a) * (R - 6), P.y + Math.sin(a) * (R - 6)); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawCronoTint() {
+    var f = slowF();
+    if (f >= 1) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(90,60,200,0.10)'; ctx.fillRect(0, 0, W, H);
+    var g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    g.addColorStop(0, 'rgba(120,90,255,0)'); g.addColorStop(1, 'rgba(120,90,255,0.28)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+  // Indicador circular de la habilidad (en táctil también es el botón)
+  var abBtn = null;
+  function drawAbilityIcon(P, cx, cy, R, label, hint) {
+    var S = shipOf(P), A = AB[S.ab], ready = P.abCd <= 0, frac = ready ? 1 : 1 - P.abCd / (P.abMax || abCd(S)), active = P.abT > 0 || P.dashT > 0;
+    ctx.save();
+    ctx.fillStyle = 'rgba(6,8,22,0.75)'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.fill();
+    // Carga del enfriamiento como sector
+    ctx.fillStyle = 'rgba(' + A.rgb + ',' + (ready ? 0.32 : 0.18) + ')';
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + TAU * frac); ctx.closePath(); ctx.fill();
+    ctx.lineWidth = ready ? 2.5 : 1.5;
+    ctx.strokeStyle = ready ? 'rgba(' + A.rgb + ',' + (0.7 + 0.3 * Math.sin(clock * 6)) + ')' : 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, TAU); ctx.stroke();
+    if (active) {
+      var df = P.dashT > 0 ? 1 : P.abT / abDur(S);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(cx, cy, R + 4, -Math.PI / 2, -Math.PI / 2 + TAU * Math.max(0, df)); ctx.stroke();
+    }
+    ctx.globalAlpha = ready ? 1 : 0.55;
+    text(A.ic, cx, cy + R * 0.32, Math.round(R * 0.95), '#ffffff');
+    ctx.globalAlpha = 1;
+    if (!ready) text(Math.ceil(P.abCd) + '', cx + R * 0.62, cy - R * 0.45, Math.max(10, Math.round(R * 0.45)), '#ffffff');
+    if (label) text(A.n.toUpperCase() + (hint ? '  [' + hint + ']' : ''), label.x, label.y, 11, ready ? 'rgb(' + A.rgb + ')' : '#8a8aa8', label.al);
+    ctx.restore();
+  }
+
   function text(str, x, y, size, color, align) {
     ctx.font = 'bold ' + size + 'px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = color; ctx.textAlign = align || 'center';
@@ -3003,6 +3201,8 @@
       ctx.fillRect(left ? sx + w * 14 : sx - (6 - w) * 14, H - 64, 11, 6);
     }
     hudBars(P, left ? sx : sx - 42, H - 55);
+    var ax = left ? sx + 132 : sx - 132;
+    drawAbilityIcon(P, ax, H - 62, 15, { x: ax, y: H - 86, al: 'center' }, padOn ? 'B' : (P.id === 0 ? 'E' : 'Shift dcho'));
   }
 
   function drawHUD() {
@@ -3034,6 +3234,15 @@
         ctx.fillRect(W - 16 - (6 - w) * 14, H - 22, 11, 6);
       }
       hudBars(P0, 16, H - 62);
+      abBtn = null;
+      if (P0.alive) {
+        if (touchMode) {
+          abBtn = { x: W - 52, y: H - 120, r: 34 };
+          drawAbilityIcon(P0, abBtn.x, abBtn.y, 30, { x: abBtn.x, y: abBtn.y + 48, al: 'center' }, '');
+        } else {
+          drawAbilityIcon(P0, W - 36, H - 78, 20, { x: W - 64, y: H - 74, al: 'right' }, padOn ? 'B' : 'E');
+        }
+      }
     } else {
       hudSide(players[0], true); hudSide(players[1], false);
     }
@@ -3113,7 +3322,7 @@
 
   function drawShop() {
     var list = tab === 0 ? UPG : SHIPS, n = list.length, y0 = H * 0.08 + 74, rh = tab === 0 ? Math.min(64, (H - y0 - 90) / n) : 56, i;
-    var vis = Math.max(1, Math.min(n, Math.floor((H - y0 - 80) / (rh + 4))));
+    var vis = Math.max(1, Math.min(n, Math.floor((H - y0 - (tab === 1 ? 130 : 80)) / (rh + 4))));
     if (tab !== shopLastTab) { shopLastTab = tab; shopTop = 0; shopLastSel = -1; }
     if (shopSel >= n) shopSel = 0;
     if (shopSel !== shopLastSel) {
@@ -3149,6 +3358,8 @@
         ctx.fillStyle = RARC[S.rar]; ctx.fillRect(16, y, 3, rh);
         drawShip(48, y + rh / 2 + 2, Math.min(10, rh * 0.27), 0, 0.2, 0, si);
         text(S.n, 80, y + rh * 0.45, 15, '#ffffff', 'left');
+        var abA = AB[S.ab], nmW = ctx.measureText(S.n).width;
+        text(abA.ic + ' ' + abA.n, 80 + nmW + 12, y + rh * 0.45, 12, 'rgb(' + abA.rgb + ')', 'left');
         text(RAR[S.rar], 80, y + rh * 0.8, 11, RARC[S.rar], 'left'); text('· ' + EL[S.el].n, 80 + RAR[S.rar].length * 6.6 + 8, y + rh * 0.8, 11, 'rgb(' + EL[S.el].rgb + ')', 'left');
         if (!owned) { label = S.gem ? '◆ ' + S.gem : '◉ ' + S.cost; col = S.gem ? (gems >= S.gem ? '#7ff0ff' : '#ff6b8a') : (wallet >= S.cost ? '#ffd54a' : '#ff6b8a'); }
         else { label = eq || 'EQUIPAR'; col = eq ? '#7dffa0' : '#b0b0d0'; }
@@ -3165,6 +3376,11 @@
     ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(W / 2 - 80, by, 160, 36);
     text('VOLVER (ESC)', W / 2, by + 24, 15, '#ffffff');
     if (shopMsgT > clock) text(shopMsg, W / 2, by - 12, 16, '#ffffff');
+    else if (tab === 1 && SHIPS[shipOrder[shopSel]]) {
+      var dS = SHIPS[shipOrder[shopSel]], dA = AB[dS.ab];
+      text(dA.ic + ' ' + dA.n.toUpperCase() + ' · enfriamiento ' + abCd(dS) + ' s' + (dA.dur > 0.5 ? ' · dura ' + abDur(dS).toFixed(1) + ' s' : ''), W / 2, by - 40, 13, 'rgb(' + dA.rgb + ')');
+      wrapText(dA.desc, W / 2, by - 23, W - 48, 13, 11, '#c0c4e0', 'center');
+    }
     text(tab ? '↑↓ elegir · ENTER/1 equipar J1 · 2 equipar J2 · ← → pestaña' : 'ENTER comprar · ← → pestaña', W / 2, H - 14, 11, '#8a8aa8');
   }
 
@@ -3524,16 +3740,23 @@
         for (var pi = 0; pi < players.length; pi++) {
           var P = players[pi];
           if (!P.alive) continue;
+          for (var ti = 0; ti < P.trail.length; ti++) {
+            ctx.globalAlpha = Math.max(0, P.trail[ti].a) * 0.45;
+            drawShip(P.trail[ti].x, P.trail[ti].y, P.r, P.trail[ti].b, 1, P.id);
+          }
+          ctx.globalAlpha = 1;
           var blink = P.invT > 0 && Math.floor(P.invT * 12) % 2 === 0;
           ctx.globalAlpha = blink ? 0.35 : 1;
           var thrust = Math.min(1, Math.max(0, (speed - 240) / 200)) * 0.5 + Math.min(1, (Math.abs(P.vx) + Math.abs(P.vy)) / 600) * 0.5;
           drawShip(P.x, P.y, P.r, P.bank, thrust, P.id);
           if (P.shieldT > 0) drawShield(P);
           if (P.superT > 0) drawSuper(P);
+          drawAbilityFx(P);
           ctx.globalAlpha = 1;
         }
       }
       drawParticles();
+      drawCronoTint();
       drawHUD();
     }
 
@@ -3821,6 +4044,13 @@
       if (k === 'ArrowLeft' || k === 'a' || k === 'A') { setMode(1); e.preventDefault(); return; }
       if (k === 'ArrowRight' || k === 'd' || k === 'D') { setMode(2); e.preventDefault(); return; }
     }
+    // Habilidad de la nave: J1 = E o Shift izquierdo; J2 = Shift derecho o 0 del teclado numérico (en 1 jugador, cualquier Shift)
+    if (state === 'playing' && !e.repeat) {
+      var abP = -1;
+      if (k === 'e' || k === 'E' || e.code === 'ShiftLeft') abP = 0;
+      else if (e.code === 'ShiftRight' || e.code === 'Numpad0') abP = numPlayers === 2 ? 1 : 0;
+      if (abP >= 0) { keyState[abP].ab = true; e.preventDefault(); return; }
+    }
     var t = keyTarget(k);
     if (t) {
       keyState[t[0]][t[1]] = true;
@@ -3918,6 +4148,7 @@
     }
     if (state === 'playing') {
       if (x >= 56 && x < 120 && y < 64) { togglePause(); return true; }
+      if (touchMode && abBtn && (x - abBtn.x) * (x - abBtn.x) + (y - abBtn.y) * (y - abBtn.y) < abBtn.r * abBtn.r) { keyState[0].ab = true; return true; }
       return false;
     }
     if (state === 'shop') {
@@ -3958,6 +4189,7 @@
   }, { passive: false });
 
   canvas.addEventListener('mousedown', function (e) {
+    if (e.button === 2 && state === 'playing' && numPlayers === 1) { keyState[0].ab = true; e.preventDefault(); return; }
     if (e.button !== 0) return;
     if (performance.now() - lastTouch < 800) return; // evento emulado tras un toque
     touchMode = false;
@@ -4110,6 +4342,8 @@
       cur = { a: padBtn(bt, 0), b: padBtn(bt, 1), x: padBtn(bt, 2), y: padBtn(bt, 3), start: padBtn(bt, 9), l: lx < -0.6, r: lx > 0.6, u: ly < -0.6, d: ly > 0.6 };
       prev = padPrev[g.index] || {};
       padPrev[g.index] = cur;
+      // B o Y activan la habilidad de la nave durante la partida
+      if (state === 'playing' && (numPlayers === 2 || n === 0) && ((cur.b && !prev.b) || (cur.y && !prev.y))) keyState[numPlayers === 2 ? Math.min(n, 1) : 0].ab = true;
       if (n === 0) {
         ev = {};
         for (kk in cur) ev[kk] = cur[kk] && !prev[kk];
