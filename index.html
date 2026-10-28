@@ -55,7 +55,7 @@
 
   // ---------- Estado ----------
   var state = 'menu'; // menu | help | map | shop | playing | paused | over
-  var players = [], enemies, pBullets, eBullets, powerups, particles;
+  var players = [], enemies, pBullets, eBullets, powerups, particles, asteroids = [];
   var speed, shake, flash;
   var numPlayers = 1, menuBtns = [];
   var level, enemyFireT, levelT, clearT, clearing, ft, formAmp, totalEnemies, curP;
@@ -691,7 +691,10 @@
     drone:  { r: 14, hp: 1, pts: 20, drop: 0.05, v: 4 },
     bomber: { r: 21, hp: 3, pts: 45, drop: 0.22, v: 5 },
     sniper: { r: 18, hp: 2, pts: 40, drop: 0.20, v: 6 },
-    spinner:{ r: 22, hp: 4, pts: 60, drop: 0.30, v: 7 }
+    spinner:{ r: 22, hp: 4, pts: 60, drop: 0.30, v: 7 },
+    splitter:{ r: 22, hp: 3, pts: 35, drop: 0.16, v: 8 },
+    splitter_mini:{ r: 14, hp: 1, pts: 15, drop: 0.05, v: 9 },
+    miniboss:{ r: 38, hp: 45, pts: 500, drop: 1.0, v: 10 }
   };
 
   // Qué enemigos aparecen según el nivel (cada tipo se desbloquea poco a poco)
@@ -701,6 +704,7 @@
       ['gunner', L >= 2 ? Math.min(60, (L - 1) * 10) : 0],
       ['heavy', (L >= 4 && r <= 1) ? Math.min(30, (L - 3) * 6) : 0],
       ['weaver', L >= 3 ? Math.min(30, (L - 2) * 6) : 0],
+      ['splitter', L >= 3 ? Math.min(24, (L - 2) * 5) : 0],
       ['drone', L >= 5 ? Math.min(22, (L - 4) * 5) : 0],
       ['bomber', L >= 7 ? Math.min(22, (L - 6) * 4) : 0],
       ['sniper', L >= 9 ? Math.min(22, (L - 8) * 4) : 0],
@@ -744,7 +748,7 @@
   function reset() {
     players = [];
     for (var i = 0; i < numPlayers; i++) players.push(makePlayer(i, numPlayers));
-    enemies = []; pBullets = []; eBullets = []; powerups = []; particles = [];
+    enemies = []; pBullets = []; eBullets = []; powerups = []; particles = []; asteroids = [];
     speed = 252; shake = 0; flash = 0; level = 1;
     coins = []; runCoins = 0; gemDrops = []; runGems = 0; zaps = []; vacOn = false;
     enemyFireT = 1.5; levelT = 0; clearT = 0; clearing = false; ft = 0; formAmp = 20; totalEnemies = 1;
@@ -760,24 +764,99 @@
         if (!R.alive) { R.alive = true; R.lives = 1; R.weapon = 1; R.shieldT = 0; R.invT = 2.5; R.vx = R.vy = 0; R.y = H - 110; powerSound(); }
       }
     }
-    enemies = []; eBullets = []; diveT = 3.5; vacOn = false;
+    enemies = []; eBullets = []; asteroids = []; diveT = 3.5; vacOn = false;
     for (var q2 = 0; q2 < players.length; q2++) { var R2 = players[q2]; if (R2.exitV > 0) { R2.exitV = 0; R2.y = H + 60; R2.enterT = 0.9; R2.invT = 2; R2.vx = R2.vy = 0; } }
     speed = 240 + L * 12;
     curP = params(L); curP.boss = !!boss; curP.c0 = runCoins; curP.g0 = runGems;
     enemyFireT = 2.2;
+    var waveNum = (camp && !camp.boss) ? camp.wave : (((level - 1) % 10) + 1);
+    var waveType = boss ? 'boss' : getWaveType(level, waveNum);
+    curP.waveType = waveType;
+    curP.waveNum = waveNum;
+
     if (boss) {
       var hp = (90 + (L / 5) * 45) * (L > 20 ? 1 - Math.min(0.25, (L - 20) * 0.01) : 1), bi = Math.max(0, Math.round(L / 5) - 1);
       enemies.push({ kind: 'boss', bid: bi % 5, elite: bi >= 5, r: 66, hp: hp, maxhp: hp, pts: 1000 * (L / 5), drop: 1, v: 2, x: W / 2, y: -140, hit: 0, ph: 0, entered: false, bt: 0, c1: 2.5, c2: 4 });
       curP.bossName = bossName(enemies[0]);
       totalEnemies = 1;
+    } else if (waveType === 'miniboss') {
+      curP.waveTitle = waveNum === 10 ? '¡MINIJEFE DE SECTOR!' : '¡ALERTA: MINIJEFE!';
+      curP.waveCol = '#ff5a8a';
+      var hpBonus = Math.min(3, Math.floor(L / 8));
+      var mbHp = Math.round((42 + L * 8.5) * (L > 20 ? 1 - Math.min(0.25, (L - 20) * 0.01) : 1));
+      var mbt = ((lvl || L) + waveNum) % 3;
+      enemies.push({
+        kind: 'miniboss', mbt: mbt, r: 38, hp: mbHp, maxhp: mbHp,
+        pts: 500 + L * 50, drop: 1, v: 10,
+        col: 2, row: 0, sx: 0, sy: 135,
+        startX: W / 2, x: W / 2, y: -90,
+        t: 0, entered: false, hit: 0, ph: 0,
+        c1: 1.4, c2: 3.0
+      });
+      curP.minibossName = minibossName(enemies[0]);
+      var escK = (L >= 4 ? 'heavy' : 'gunner');
+      var escK2 = (L >= 3 ? 'weaver' : 'gunner');
+      var escList = [
+        { sx: -115, sy: 135, k: escK },
+        { sx: 115, sy: 135, k: escK },
+        { sx: -65, sy: 195, k: escK2 },
+        { sx: 65, sy: 195, k: escK2 }
+      ];
+      for (var ei = 0; ei < escList.length; ei++) {
+        var item = escList[ei];
+        var EK = KIND[item.k];
+        enemies.push({
+          kind: item.k, r: EK.r, hp: EK.hp + hpBonus, maxhp: EK.hp + hpBonus, pts: EK.pts, drop: EK.drop, v: EK.v,
+          col: ei, row: 1, sx: item.sx, sy: item.sy,
+          startX: ei % 2 === 0 ? -40 : W + 40, x: -100, y: -60,
+          t: -((ei + 1) * 0.12), entered: false, hit: 0, ph: Math.random() * TAU
+        });
+      }
+      totalEnemies = enemies.length;
+      formAmp = 28;
+    } else if (waveType === 'drones') {
+      curP.waveTitle = '¡ENJAMBRE DE DRONES!';
+      curP.waveCol = '#ffaa40';
+      var dCols = Math.min(6, Math.max(4, Math.floor((W - 40) / 54)));
+      var dRows = 3;
+      var dCellW = Math.min(62, (W - 40) / dCols);
+      var dRowGap = 52;
+      var dHp = 1 + Math.min(2, Math.floor(L / 14));
+      for (var dr = 0; dr < dRows; dr++) {
+        for (var dc = 0; dc < dCols; dc++) {
+          enemies.push({
+            kind: 'drone', r: KIND.drone.r, hp: dHp, maxhp: dHp, pts: KIND.drone.pts, drop: KIND.drone.drop, v: KIND.drone.v,
+            col: dc, row: dr, sx: (dc - (dCols - 1) / 2) * dCellW, sy: 125 + dr * dRowGap,
+            startX: (dr % 2 === 0) ? -40 : W + 40, x: -100, y: -60,
+            t: -((dr * dCols + dc) * 0.04 + Math.random() * 0.1), entered: false, hit: 0, ph: Math.random() * TAU,
+            droneT: 0.9 + (dr * dCols + dc) * 0.35 + Math.random() * 0.4
+          });
+        }
+      }
+      totalEnemies = enemies.length;
+      formAmp = Math.max(18, (W - dCols * dCellW) / 2 - 14);
     } else {
+      if (waveType === 'asteroids') {
+        curP.waveTitle = '¡CAMPO DE ASTEROIDES!';
+        curP.waveCol = '#7fe0ff';
+        var numAst = 5 + Math.min(3, Math.floor(L / 5));
+        for (var ai = 0; ai < numAst; ai++) {
+          var ar = 22 + Math.random() * 12;
+          var ax = 30 + (ai + 0.5) * ((W - 60) / numAst) + (Math.random() - 0.5) * 26;
+          var ay = 190 + (ai % 2) * 80 + Math.random() * 35;
+          spawnAsteroid(ax, ay, ar, 3 + Math.floor(L / 8), (Math.random() - 0.5) * 40, 22 + Math.random() * 30, true);
+        }
+      } else if (waveType === 'splitter') {
+        curP.waveTitle = '¡ENEMIGOS MULTIPLICADORES!';
+        curP.waveCol = '#7ff5c0';
+      }
       var cols = curP.cols, rows = curP.rows;
       var cellW = Math.min(64, (W - 40) / cols);
       var rowGap = Math.min(62, Math.max(46, H * 0.065));
       var hpBonus = Math.min(3, Math.floor(L / 8));
       for (var r = 0; r < rows; r++) {
         for (var c = 0; c < cols; c++) {
-          var kind = pickKind(L, r);
+          var kind = waveType === 'splitter' && r <= 2 ? 'splitter' : pickKind(L, r);
           var K = KIND[kind];
           enemies.push({
             kind: kind, r: K.r, hp: K.hp + hpBonus, maxhp: K.hp + hpBonus, pts: K.pts, drop: K.drop, v: K.v,
@@ -894,6 +973,17 @@
       // Espiral: anillo de 6 disparos que va girando
       e.rot = (e.rot || 0) + 0.45;
       for (i = 0; i < 6; i++) eShot(e.x, y, e.rot + i * TAU / 6, bs * 0.75, [110, 255, 210]);
+    } else if (e.kind === 'splitter') {
+      // Multiplicador: disparos dobles esmeralda en ángulo
+      eShot(e.x - 8, y, Math.PI / 2 - 0.12, bs * 0.95, [90, 255, 180]);
+      eShot(e.x + 8, y, Math.PI / 2 + 0.12, bs * 0.95, [90, 255, 180]);
+    } else if (e.kind === 'splitter_mini') {
+      // Sub-caza rápido: proyectil apuntado
+      a = aimAt(e.x, y);
+      eShot(e.x, y, a, bs * 1.1, [140, 255, 210], 4.5);
+    } else if (e.kind === 'miniboss') {
+      a = aimAt(e.x, y);
+      eShot(e.x, y, a, bs * 1.1, [255, 90, 160], 5.5);
     } else {
       // Acorazado: alterna un abanico amplio hacia abajo y un triple apuntado, con proyectiles grandes
       e.alt = !e.alt;
@@ -928,7 +1018,7 @@
     var front = {}, k, list = [];
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
-      if (!e.entered || e.kind === 'boss' || e.dive || e.kind === 'drone') continue;
+      if (!e.entered || e.kind === 'boss' || e.kind === 'miniboss' || e.dive || e.kind === 'drone') continue;
       if (!front[e.col] || e.row > front[e.col].row) front[e.col] = e;
     }
     for (k in front) list.push(front[k]);
@@ -939,6 +1029,147 @@
     { n: 'CENTINELA', pal: 2 }, { n: 'TEJEDORA', pal: 3 }, { n: 'BOMBARDERO', pal: 4 }, { n: 'CAZADOR', pal: 5 }, { n: 'TORMENTA', pal: 6 }
   ];
   function bossName(e) { return BOSSES[e.bid || 0].n + (e.elite ? ' ÉLITE' : ''); }
+
+  var MINIBOSSES = [
+    { n: 'VANGUARDIA NEÓN', pal: [255, 80, 160] },
+    { n: 'NEXUS PULSAR', pal: [90, 230, 255] },
+    { n: 'COLOSO TITÁN', pal: [255, 170, 40] }
+  ];
+  function minibossName(e) {
+    return MINIBOSSES[(e.mbt || 0) % MINIBOSSES.length].n;
+  }
+
+  function getWaveType(lvl, wave) {
+    if (wave === 5 || wave === 10) return 'miniboss';
+    if (lvl % 2 === 1) {
+      if (wave === 3 || wave === 8) return 'splitter';
+      if (wave === 4 || wave === 7) return 'asteroids';
+      if (wave === 6) return 'drones';
+    } else {
+      if (wave === 2 || wave === 7) return 'drones';
+      if (wave === 3 || wave === 6) return 'asteroids';
+      if (wave === 4 || wave === 8) return 'splitter';
+    }
+    return 'standard';
+  }
+
+  // Asteroides flotantes que absorben y bloquean proyectiles
+  function spawnAsteroid(x, y, r, hp, vx, vy, splitOnDeath) {
+    var numPts = 8, pts = [];
+    for (var i = 0; i < numPts; i++) {
+      var angle = (i * TAU) / numPts;
+      var dist = r * (0.8 + Math.random() * 0.4);
+      pts.push({ a: angle, d: dist });
+    }
+    asteroids.push({
+      x: x, y: y,
+      vx: vx !== undefined ? vx : (Math.random() - 0.5) * 40,
+      vy: vy !== undefined ? vy : (25 + Math.random() * 35),
+      r: r,
+      hp: hp || 3,
+      maxhp: hp || 3,
+      rot: Math.random() * TAU,
+      vRot: (Math.random() - 0.5) * 1.5,
+      pts: pts,
+      hit: 0,
+      splitOnDeath: !!splitOnDeath
+    });
+  }
+
+  function destroyAsteroid(idx, owner) {
+    var a = asteroids[idx];
+    if (!a) return;
+    explode(a.x, a.y, a.r > 20 ? 0.8 : 0.5);
+    explosionSound(0.5);
+    if (owner && owner.score !== undefined) {
+      owner.score += a.r > 20 ? 25 : 12;
+    }
+    if (a.splitOnDeath && a.r >= 22) {
+      for (var s = -1; s <= 1; s += 2) {
+        spawnAsteroid(a.x + s * 12, a.y, a.r * 0.55, 2, a.vx + s * 65, Math.max(30, a.vy * 0.9), false);
+      }
+    }
+    if (Math.random() < 0.2) {
+      coins.push({ x: a.x, y: a.y, vx: (Math.random() - 0.5) * 100, vy: -40 - Math.random() * 50, ph: Math.random() * TAU });
+    }
+    asteroids.splice(idx, 1);
+  }
+
+  function updateAsteroids(dt) {
+    for (var ai = asteroids.length - 1; ai >= 0; ai--) {
+      var a = asteroids[ai];
+      a.hit = Math.max(0, a.hit - dt);
+      a.rot += a.vRot * dt;
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+      if (a.x < a.r) { a.x = a.r; a.vx = Math.abs(a.vx); }
+      else if (a.x > W - a.r) { a.x = W - a.r; a.vx = -Math.abs(a.vx); }
+      if (a.y > H + a.r + 20) {
+        if (!clearing) { a.y = -a.r - 10; a.x = 24 + Math.random() * (W - 48); }
+        else { asteroids.splice(ai, 1); continue; }
+      }
+      for (var q = 0; q < players.length; q++) {
+        var P = players[q];
+        if (!P.alive || P.invT > 0) continue;
+        var dx = P.x - a.x, dy = P.y - a.y, rr = a.r * 0.85 + P.hitR;
+        if (dx * dx + dy * dy < rr * rr) {
+          hurtPlayer(P);
+          destroyAsteroid(ai, null);
+          break;
+        }
+      }
+    }
+  }
+
+  // Minijefe de oleadas 5 y 10
+  function updateMiniboss(e, dt, firing) {
+    e.bt = (e.bt || 0) + dt;
+    e.hit = Math.max(0, e.hit - dt);
+    var amp = Math.max(14, W / 2 - e.r - 20);
+    if (!e.entered) {
+      var k0 = Math.min(1, e.bt / 1.5);
+      e.x = W / 2;
+      e.y = -80 + 215 * (1 - Math.pow(1 - k0, 3));
+      if (k0 >= 1) { e.entered = true; e.bt = 0; }
+      return;
+    }
+    e.x = W / 2 + Math.sin(e.bt * 0.9) * amp * 0.65;
+    e.y = 135 + Math.sin(e.bt * 1.8) * 14;
+
+    if (!firing) return;
+    var f = e.hp / e.maxhp, bs = curP.bs;
+    e.c1 = (e.c1 || 1.5) - dt;
+    e.c2 = (e.c2 || 3.0) - dt;
+
+    if (e.c1 <= 0) {
+      e.c1 = f > 0.4 ? 1.5 : 1.0;
+      var a = aimAt(e.x, e.y);
+      if ((e.mbt || 0) === 0) {
+        for (var i = -1; i <= 1; i++) {
+          eShot(e.x, e.y + e.r * 0.5, a + i * 0.18, bs * 1.05, [255, 90, 160], 5.5);
+        }
+      } else if ((e.mbt || 0) === 1) {
+        eShot(e.x - 14, e.y + e.r * 0.5, Math.PI / 2, bs, [90, 230, 255], 5, { sw: 28 });
+        eShot(e.x + 14, e.y + e.r * 0.5, Math.PI / 2, bs, [90, 230, 255], 5, { sw: -28 });
+      } else {
+        for (var i = -2; i <= 2; i++) {
+          eShot(e.x, e.y + e.r * 0.5, Math.PI / 2 + i * 0.22, bs * 0.88, [255, 170, 40], 6);
+        }
+      }
+      enemyPew();
+    }
+
+    if (e.c2 <= 0) {
+      e.c2 = f > 0.4 ? 3.6 : 2.4;
+      if (f <= 0.65) {
+        var off = Math.random() * TAU;
+        for (var i = 0; i < 8; i++) {
+          eShot(e.x, e.y, off + i * TAU / 8, bs * 0.75, [255, 230, 100], 4.5);
+        }
+        enemyPew();
+      }
+    }
+  }
 
   // Dron suicida invocado (por el Bombardero): ya nace lanzado contra el jugador
   function spawnDrone(x, y) {
@@ -1049,9 +1280,19 @@
     for (var i = 0; i < enemies.length; i++) {
       var e = enemies[i];
       if (e.kind === 'boss') { updateBoss(e, dt, firing); continue; }
+      if (e.kind === 'miniboss') { updateMiniboss(e, dt, firing); continue; }
       if (e.free) {
         e.hit = Math.max(0, e.hit - dt);
-        if (e.dive && diveMove(e, dt)) { enemies.splice(i, 1); i--; }
+        if (e.dive && diveMove(e, dt)) { enemies.splice(i, 1); i--; continue; }
+        if (e.kind === 'splitter_mini') {
+          e.x += (e.vx || 0) * dt;
+          e.y += (e.vy || 0) * dt;
+          e.vx = (e.vx || 0) * Math.pow(0.5, dt);
+          e.x += Math.sin(clock * 5 + e.ph) * 55 * dt;
+          if (e.x < e.r) { e.x = e.r; e.vx = Math.abs(e.vx || 0); }
+          else if (e.x > W - e.r) { e.x = W - e.r; e.vx = -Math.abs(e.vx || 0); }
+          if (e.y > H + 40) { enemies.splice(i, 1); i--; continue; }
+        }
         continue;
       }
       e.hit = Math.max(0, e.hit - dt);
@@ -1082,22 +1323,22 @@
 
   function coinSound() { tone(1180, 0.04, 'square', 0.025, 0); tone(1560, 0.06, 'square', 0.025, 0.04); }
   function dropCoins(e) {
-    var n = ({ boss: 40, heavy: 3, bomber: 3, spinner: 3, gunner: 2, sniper: 2, weaver: 2 })[e.kind] || 1;
+    var n = ({ boss: 40, miniboss: 14, heavy: 3, bomber: 3, spinner: 3, gunner: 2, sniper: 2, weaver: 2, splitter: 3 })[e.kind] || 1;
     for (var i = 0; i < n && coins.length < 150; i++) coins.push({ x: e.x + (Math.random() - 0.5) * 20, y: e.y, vx: (Math.random() - 0.5) * 160, vy: -60 - Math.random() * 80, ph: Math.random() * TAU });
   }
   function dropGems(e) {
-    var n = 4 + Math.floor((level || 5) / 5) + (e.elite ? 8 : 0);
-    curP.gemsGot = n;
+    var n = e.kind === 'miniboss' ? (1 + (Math.random() < 0.5 ? 1 : 0)) : (4 + Math.floor((level || 5) / 5) + (e.elite ? 8 : 0));
+    curP.gemsGot = (curP.gemsGot || 0) + n;
     for (var i = 0; i < n && gemDrops.length < 80; i++) {
       var a = Math.random() * TAU, sp = 90 + Math.random() * 190;
       gemDrops.push({ x: e.x + (Math.random() - 0.5) * 30, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 70, ph: Math.random() * TAU });
     }
-    addP({ t: 'ring', x: e.x, y: e.y, vx: 0, vy: 0, life: 0.7, maxR: 130, col: [120, 240, 255] });
+    addP({ t: 'ring', x: e.x, y: e.y, vx: 0, vy: 0, life: 0.7, maxR: e.kind === 'miniboss' ? 80 : 130, col: [120, 240, 255] });
   }
   function gemSound() { tone(1568, 0.05, 'triangle', 0.04, 0); tone(2093, 0.09, 'triangle', 0.04, 0.05); tone(2637, 0.12, 'triangle', 0.03, 0.1); }
   function killEnemy(j, owner) {
     var e = enemies[j];
-    var s = e.kind === 'boss' ? 2.2 : (e.kind === 'heavy' ? 0.85 : 0.6);
+    var s = e.kind === 'boss' ? 2.2 : (e.kind === 'miniboss' ? 1.4 : (e.kind === 'heavy' ? 0.85 : (e.kind === 'splitter' ? 0.75 : 0.6)));
     explode(e.x, e.y, s);
     explosionSound(s);
     (owner || players[0]).score += e.pts;
@@ -1108,6 +1349,25 @@
       dropGems(e); vacOn = true; vacAt = clock + 0.55;
       for (var i = 0; i < 3; i++) dropPower(e.x + (i - 1) * 40, e.y);
       for (var fi = 0; fi < enemies.length; fi++) if (enemies[fi].free) enemies[fi].dying = true;
+    } else if (e.kind === 'miniboss') {
+      shake = 0.5; flash = 0.4;
+      dropGems(e);
+      dropPower(e.x, e.y);
+    } else if (e.kind === 'splitter') {
+      tone(520, 0.05, 'sine', 0.04, 0); tone(740, 0.07, 'sine', 0.04, 0.04);
+      addP({ t: 'ring', x: e.x, y: e.y, life: 0.35, maxR: 38, col: [120, 255, 190] });
+      sparksAt(e.x, e.y, 8, [120, 255, 190]);
+      var smHp = 1 + Math.min(2, Math.floor(level / 12));
+      for (var side = -1; side <= 1; side += 2) {
+        enemies.push({
+          kind: 'splitter_mini', r: 14, hp: smHp, maxhp: smHp, pts: 15, drop: 0.05, v: 9,
+          free: true, entered: true, x: e.x + side * 14, y: e.y,
+          vx: side * (130 + Math.random() * 40), vy: 40 + Math.random() * 30,
+          hit: 0, ph: Math.random() * TAU, t: 0
+        });
+        totalEnemies++;
+      }
+      if (Math.random() < e.drop) dropPower(e.x, e.y);
     } else if (Math.random() < e.drop) {
       dropPower(e.x, e.y);
     }
@@ -1253,6 +1513,7 @@
     for (q = 0; q < players.length; q++) updatePlayer(players[q], dt);
 
     formationStep(dt, true);
+    updateAsteroids(dt);
     enemyFireT -= dt;
     if (enemyFireT <= 0 && !clearing) {
       enemyFireT = curP.fireInt * (0.6 + Math.random() * 0.8);
@@ -1309,6 +1570,21 @@
       }
       b.x += b.vx * dt; b.y += b.vy * dt;
       if (b.y < -30 || b.y > H + 40 || b.x < -30 || b.x > W + 30) { pBullets.splice(i, 1); continue; }
+      if (asteroids.length) {
+        for (j = 0; j < asteroids.length; j++) {
+          var ast = asteroids[j];
+          ddx = b.x - ast.x; ddy = b.y - ast.y; rr = ast.r + b.r;
+          if (ddx * ddx + ddy * ddy < rr * rr) {
+            ast.hp -= (b.dmg || 1); ast.hit = 0.1;
+            sparksAt(b.x, b.y, 4, [160, 215, 255]); hitSound();
+            var gone = b.pierce <= 0;
+            if (gone) pBullets.splice(i, 1); else { b.pierce--; }
+            if (ast.hp <= 0) { destroyAsteroid(j, b.o); j--; }
+            if (gone) break;
+          }
+        }
+        if (pBullets[i] !== b) continue;
+      }
       for (j = 0; j < enemies.length; j++) {
         e = enemies[j];
         if (e.y < -e.r * 0.5) continue;
@@ -1336,6 +1612,22 @@
       if (b.fuse !== undefined) { b.fuse -= dt; if (b.fuse <= 0) { bombBurst(b); eBullets.splice(i, 1); continue; } }
       b.x += b.vx * dt; b.y += b.vy * dt;
       if (b.y > H + 30 || b.y < -30 || b.x < -30 || b.x > W + 30) { eBullets.splice(i, 1); continue; }
+      if (asteroids.length) {
+        var astHit = false;
+        for (var aj = 0; aj < asteroids.length; aj++) {
+          var ast2 = asteroids[aj];
+          ddx = b.x - ast2.x; ddy = b.y - ast2.y; rr = ast2.r + b.r;
+          if (ddx * ddx + ddy * ddy < rr * rr) {
+            sparksAt(b.x, b.y, 3, b.col || [255, 120, 60]);
+            ast2.hp -= 0.35; ast2.hit = 0.05;
+            eBullets.splice(i, 1);
+            if (ast2.hp <= 0) destroyAsteroid(aj, null);
+            astHit = true;
+            break;
+          }
+        }
+        if (astHit) continue;
+      }
       for (q = 0; q < players.length; q++) {
         P = players[q];
         if (!P.alive || P.invT > 0) continue;
@@ -1423,6 +1715,10 @@
     if (!clearing && enemies.length === 0) {
       msnOnWaveClear();
       clearing = true; clearT = 2.2;
+      if (asteroids.length) {
+        for (var cai = 0; cai < asteroids.length; cai++) sparksAt(asteroids[cai].x, asteroids[cai].y, 4, [160, 215, 255]);
+        asteroids = [];
+      }
       curP.fin = numPlayers === 2 || !!curP.boss || !!(camp && (camp.boss || (camp.wave >= 10 && camp.lv % 5 !== 0)));
       if (curP.fin) { clearT = curP.boss ? 5.2 : 4.4; vacOn = true; vacAt = clock; }
       curP.clearDur = clearT;
@@ -1456,6 +1752,10 @@
     for (i = powerups.length - 1; i >= 0; i--) {
       powerups[i].y += 90 * dt;
       if (powerups[i].y > H + 30) powerups.splice(i, 1);
+    }
+    for (i = asteroids.length - 1; i >= 0; i--) {
+      asteroids[i].y += 120 * dt;
+      if (asteroids[i].y > H + 40) asteroids.splice(i, 1);
     }
   }
 
@@ -1979,6 +2279,237 @@
     drawSaucer(e, BOSSES[b].pal);
   }
 
+  function drawAsteroids() {
+    for (var i = 0; i < asteroids.length; i++) {
+      var a = asteroids[i];
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      ctx.lineJoin = 'round';
+
+      ctx.globalCompositeOperation = 'lighter';
+      var ag = ctx.createRadialGradient(0, 0, a.r * 0.2, 0, 0, a.r * 1.4);
+      ag.addColorStop(0, 'rgba(100, 190, 255, 0.14)');
+      ag.addColorStop(1, 'rgba(100, 190, 255, 0)');
+      ctx.fillStyle = ag;
+      ctx.beginPath();
+      ctx.arc(0, 0, a.r * 1.4, 0, TAU);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+
+      ctx.beginPath();
+      for (var p = 0; p < a.pts.length; p++) {
+        var pt = a.pts[p];
+        var px = Math.cos(pt.a) * pt.d;
+        var py = Math.sin(pt.a) * pt.d;
+        if (p === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+
+      var bg = ctx.createRadialGradient(-a.r * 0.3, -a.r * 0.3, a.r * 0.1, 0, 0, a.r);
+      bg.addColorStop(0, '#26334a');
+      bg.addColorStop(0.55, '#121826');
+      bg.addColorStop(1, '#080c16');
+      ctx.fillStyle = bg;
+      ctx.fill();
+
+      ctx.strokeStyle = a.hit > 0 ? '#ffffff' : 'rgba(130, 210, 255, 0.8)';
+      ctx.lineWidth = a.hit > 0 ? 2.5 : 1.6;
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(110, 190, 250, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-a.r * 0.3, -a.r * 0.2);
+      ctx.lineTo(a.r * 0.1, a.r * 0.15);
+      ctx.lineTo(a.r * 0.4, 0);
+      ctx.stroke();
+
+      if (a.hit > 0) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = 'rgba(255, 255, 255, ' + Math.min(0.65, a.hit * 7) + ')';
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      if (a.hp < a.maxhp) {
+        var bw = a.r * 1.4;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(-bw / 2, -a.r - 8, bw, 3);
+        ctx.fillStyle = '#65d5ff';
+        ctx.fillRect(-bw / 2, -a.r - 8, bw * Math.max(0, a.hp / a.maxhp), 3);
+      }
+
+      ctx.restore();
+    }
+  }
+
+  function drawSplitter(e) {
+    var r = e.r, cp = 0.5 + 0.5 * Math.sin(clock * 6 + e.ph);
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.lineJoin = 'round';
+
+    ctx.globalCompositeOperation = 'lighter';
+    var gg = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.5);
+    gg.addColorStop(0, 'rgba(100,255,180,0.28)');
+    gg.addColorStop(1, 'rgba(100,255,180,0)');
+    ctx.fillStyle = gg;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.5, 0, TAU);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    [-1, 1].forEach(function(s) {
+      var ox = s * r * 0.45;
+      var cg = ctx.createLinearGradient(ox, -r * 0.8, ox, r * 0.8);
+      cg.addColorStop(0, '#c2ffe0');
+      cg.addColorStop(0.5, '#1da36d');
+      cg.addColorStop(1, '#093d27');
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.ellipse(ox, 0, r * 0.42, r * 0.82, s * 0.1, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(180,255,220,0.6)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(160,255,210,' + (0.5 + 0.5 * cp) + ')';
+      ctx.beginPath();
+      ctx.arc(ox, -r * 0.1, r * 0.18, 0, TAU);
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+    });
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(180,255,230,' + (0.4 + 0.5 * Math.sin(clock * 14)) + ')';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.35, 0);
+    ctx.lineTo(r * 0.35, 0);
+    ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+
+    ctx.restore();
+  }
+
+  function drawSplitterMini(e) {
+    var r = e.r, fl = r * (0.6 + Math.random() * 0.4);
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.lineJoin = 'round';
+
+    ctx.globalCompositeOperation = 'lighter';
+    var fg = ctx.createLinearGradient(0, -r * 0.5, 0, -r * 0.5 - fl);
+    fg.addColorStop(0, 'rgba(140,255,200,0.9)');
+    fg.addColorStop(1, 'rgba(40,200,120,0)');
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.3, -r * 0.5);
+    ctx.lineTo(0, -r * 0.5 - fl);
+    ctx.lineTo(r * 0.3, -r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    var hg = ctx.createLinearGradient(-r, 0, r, 0);
+    hg.addColorStop(0, '#0c4028');
+    hg.addColorStop(0.5, '#7ff5c0');
+    hg.addColorStop(1, '#0c4028');
+    ctx.fillStyle = hg;
+    ctx.beginPath();
+    ctx.moveTo(0, r * 1.1);
+    ctx.lineTo(r * 0.85, -r * 0.6);
+    ctx.lineTo(0, -r * 0.2);
+    ctx.lineTo(-r * 0.85, -r * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(200,255,230,0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.22, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMiniboss(e) {
+    var r = e.r;
+    var pal = (e.mbt || 0) % 3;
+    var colMain = pal === 0 ? '#ff4080' : (pal === 1 ? '#00e5ff' : '#ffaa30');
+    var colDark = pal === 0 ? '#4a0b22' : (pal === 1 ? '#0b354a' : '#4a2c0b');
+    var rgb = pal === 0 ? [255, 64, 128] : (pal === 1 ? [0, 229, 255] : [255, 170, 48]);
+
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.lineJoin = 'round';
+
+    ctx.globalCompositeOperation = 'lighter';
+    var eg = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.7);
+    eg.addColorStop(0, 'rgba(' + rgb.join(',') + ', 0.35)');
+    eg.addColorStop(1, 'rgba(' + rgb.join(',') + ', 0)');
+    ctx.fillStyle = eg;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 1.7, 0, TAU);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+
+    [-1, 1].forEach(function(s) {
+      ctx.fillStyle = colDark;
+      ctx.strokeStyle = colMain;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.3, -r * 0.4);
+      ctx.lineTo(s * r * 1.25, r * 0.15);
+      ctx.lineTo(s * r * 0.85, r * 0.7);
+      ctx.lineTo(s * r * 0.25, r * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#111622';
+      ctx.fillRect(s * r * 0.95 - 3, r * 0.2, 6, 12);
+      ctx.fillStyle = colMain;
+      ctx.fillRect(s * r * 0.95 - 2, r * 0.45, 4, 4);
+    });
+
+    var hg = ctx.createLinearGradient(0, -r * 0.9, 0, r * 0.9);
+    hg.addColorStop(0, '#ffffff');
+    hg.addColorStop(0.3, colMain);
+    hg.addColorStop(1, colDark);
+    ctx.fillStyle = hg;
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.95);
+    ctx.lineTo(r * 0.55, r * 0.2);
+    ctx.lineTo(r * 0.45, -r * 0.7);
+    ctx.lineTo(0, -r * 0.95);
+    ctx.lineTo(-r * 0.45, -r * 0.7);
+    ctx.lineTo(-r * 0.55, r * 0.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    ctx.globalCompositeOperation = 'lighter';
+    var cp = 0.6 + 0.4 * Math.sin(clock * 8 + (e.ph || 0));
+    var cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.38);
+    cg.addColorStop(0, 'rgba(255,255,255,0.95)');
+    cg.addColorStop(0.5, 'rgba(' + rgb.join(',') + ',' + cp + ')');
+    cg.addColorStop(1, 'rgba(' + rgb.join(',') + ',0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.38, 0, TAU);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   function drawEnemy(e) {
     if (e.charge > 0 && e.aim !== undefined) {
       // línea láser de aviso antes del disparo
@@ -1992,6 +2523,9 @@
       ctx.restore();
     }
     if (e.kind === 'boss') drawBoss(e);
+    else if (e.kind === 'miniboss') drawMiniboss(e);
+    else if (e.kind === 'splitter') drawSplitter(e);
+    else if (e.kind === 'splitter_mini') drawSplitterMini(e);
     else if (e.kind === 'heavy') drawHeavy(e);
     else if (e.kind === 'gunner') drawFighter(e);
     else if (e.kind === 'weaver') drawWeaver(e);
@@ -2007,7 +2541,7 @@
       ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 0.95, 0, TAU); ctx.fill();
       ctx.globalCompositeOperation = 'source-over';
     }
-    if (e.kind !== 'scout' && e.kind !== 'boss' && e.hp < e.maxhp) {
+    if (e.kind !== 'scout' && e.kind !== 'boss' && e.kind !== 'miniboss' && e.hp < e.maxhp) {
       var bw = e.r * 1.6;
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(e.x - bw / 2, e.y - e.r - 9, bw, 3);
       ctx.fillStyle = '#ff6a3d'; ctx.fillRect(e.x - bw / 2, e.y - e.r - 9, bw * (e.hp / e.maxhp), 3);
@@ -2176,7 +2710,7 @@
       hudSide(players[0], true); hudSide(players[1], false);
     }
 
-    // Barra del jefe
+    // Barra del jefe o minijefe
     for (var j = 0; j < enemies.length; j++) {
       var e = enemies[j];
       if (e.kind === 'boss') {
@@ -2186,6 +2720,13 @@
         bgr.addColorStop(0, '#ff3d6e'); bgr.addColorStop(1, '#ff9f1a');
         ctx.fillStyle = bgr; ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxhp), 8);
         text(bossName(e), W / 2, by + 26, 13, '#ffd0e0');
+      } else if (e.kind === 'miniboss') {
+        var bw = W * 0.52, bx = (W - bw) / 2, by = 82;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx - 2, by - 2, bw + 4, 10);
+        var bgr = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        bgr.addColorStop(0, '#ff9f1a'); bgr.addColorStop(1, '#ff3d6e');
+        ctx.fillStyle = bgr; ctx.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxhp), 6);
+        text('MINIJEFE: ' + minibossName(e), W / 2, by + 22, 11, '#ffe090');
       }
     }
 
@@ -2197,7 +2738,18 @@
       text((numPlayers === 2 ? 'RONDA ' : 'NIVEL ') + level, W / 2, H * 0.34, Math.min(56, W / 7), '#ffffff');
       noGlow();
       if (curP.boss) text('¡JEFE: ' + (curP.bossName || '') + '!', W / 2, H * 0.34 + 40, Math.min(24, W / 14), '#ff5a8a');
-      else if (numPlayers === 1 && camp) text('OLEADA ' + camp.wave + ' / 10', W / 2, H * 0.34 + 40, 24, '#9fb4ff');
+      else if (numPlayers === 1 && camp) {
+        text('OLEADA ' + camp.wave + ' / 10', W / 2, H * 0.34 + 40, 24, '#9fb4ff');
+        if (curP.waveTitle) {
+          glow(curP.waveCol || '#ffe27a', 16);
+          text(curP.waveTitle, W / 2, H * 0.34 + 72, 17, curP.waveCol || '#ffe27a');
+          noGlow();
+        }
+      } else if (curP.waveTitle) {
+        glow(curP.waveCol || '#ffe27a', 16);
+        text(curP.waveTitle, W / 2, H * 0.34 + 40, 18, curP.waveCol || '#ffe27a');
+        noGlow();
+      }
       ctx.globalAlpha = 1;
     }
     if (clearing && curP.fin) {
@@ -2534,6 +3086,7 @@
       ['heavy', 'ACORAZADO', '#ff7a50', 'Muy resistente. Lanza abanicos de proyectiles grandes.'],
       ['weaver', 'TEJEDOR', '#7ff5c0', 'Sus disparos serpentean en zigzag. Difíciles de esquivar.'],
       ['drone', 'DRON SUICIDA', '#ff8a70', 'No dispara: se lanza contra ti a toda velocidad.'],
+      ['splitter', 'MULTIPLICADOR', '#7ff5c0', 'Nave doble: al ser destruida se divide en 2 cazas rápidos.'],
       ['bomber', 'BOMBARDERO', '#ffb84a', 'Suelta bombas lentas que estallan en un anillo de disparos.'],
       ['sniper', 'FRANCOTIRADOR', '#ff6a80', 'Te marca con un láser rojo y dispara un tiro rapidísimo.'],
       ['spinner', 'ESPIRAL', '#7affd2', 'Lanza anillos de disparos que giran en todas direcciones.']
@@ -2556,7 +3109,7 @@
       ['CAZADOR', '#ff6a80', 'Se mueve rápido, apunta con láser y dispara triple.'],
       ['TORMENTA', '#8fe8ff', 'Espirales giratorias de disparos y anillos.']
     ];
-    var n = wrapText('Aparece un jefe cada 5 niveles y suelta muchas monedas ◉ y diamantes ◆. Desde el nivel 30 vuelven ÉLITE: más agresivos y con más diamantes. Con ◆ compras naves Épicas, Legendarias y Míticas.', 24, y0 + 4, W - 48, 15, 12, '#ffd54a', 'left');
+    var n = wrapText('En las oleadas 5 y 10 te esperan poderosos MINI-JEFES con escolta. Cada 5 niveles aparece un gran JEFE FINAL que suelta muchas monedas ◉ y diamantes ◆. ¡Desde nivel 30 son ÉLITE!', 24, y0 + 4, W - 48, 15, 12, '#ffd54a', 'left');
     var ys = y0 + n * 15 + 10, rh = Math.min(86, (yEnd - ys) / list.length), i, cy, e;
     for (i = 0; i < list.length; i++) {
       cy = ys + i * rh + rh / 2;
@@ -2610,6 +3163,7 @@
       for (i = 0; i < powerups.length; i++) drawPower(powerups[i]);
       for (i = 0; i < coins.length; i++) drawCoin(coins[i]);
       for (i = 0; i < gemDrops.length; i++) drawGem(gemDrops[i]);
+      drawAsteroids();
       for (i = 0; i < enemies.length; i++) { drawEnemy(enemies[i]); drawStatus(enemies[i]); }
       drawBullets();
       if (state === 'playing' || state === 'paused') {
@@ -3148,11 +3702,17 @@
   });
 
   // Gancho para pruebas automáticas (no hace nada en el juego real)
-  if (typeof __ND_TEST !== 'undefined') {
-    __ND_TEST.get = function () {
+  var _testHook = typeof __ND_TEST !== 'undefined' ? __ND_TEST : (typeof window !== 'undefined' && window.__ND_TEST ? window.__ND_TEST : (typeof globalThis !== 'undefined' && globalThis.__ND_TEST ? globalThis.__ND_TEST : null));
+  if (_testHook) {
+    _testHook.get = function () {
       var p0 = players[0] || {};
-      return { state: state, level: level, lives: p0.lives, score: totalScore(), weapon: p0.weapon, player: p0, players: players, enemies: enemies, eBullets: eBullets.length, W: W, H: H, clearing: clearing };
+      return { state: state, level: level, lives: p0.lives, score: totalScore(), weapon: p0.weapon, player: p0, players: players, enemies: enemies, asteroids: asteroids, eBullets: eBullets.length, W: W, H: H, clearing: clearing, camp: camp };
     };
+    _testHook.start = start;
+    _testHook.startLevel = startLevel;
+    _testHook.nextStage = nextStage;
+    _testHook.killEnemy = killEnemy;
+    _testHook.destroyAsteroid = destroyAsteroid;
   }
 
   // ---------- Bucle ----------
