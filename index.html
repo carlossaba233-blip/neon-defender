@@ -64,6 +64,54 @@
   var diveT = 4, helpTab = 0, helpRects = [], overBtns = [], touchMode = false, tch = null, lastTouch = 0, padOn = false, padMsg = '', padMsgT = 0, padPrev = {};
   var gameMode = 'camp'; // 'camp' | 'endless' | 'bossrush' | 'daily' | 'coop'
   var endlessWave = 1, bossRushIdx = 1, dailyWave = 1;
+  var MUTATOR_DEFS = {
+    hyper_drive: {
+      id: 'hyper_drive', name: 'Hiperimpulsión', badge: 'HIPER', ic: '⚡', col: '#00f0ff',
+      desc: 'Velocidad de nave +25% y cadencia +20%, pero enemigos avanzan +15% más rápido.'
+    },
+    explosive_plasma: {
+      id: 'explosive_plasma', name: 'Plasma Volátil', badge: 'EXPLOSIVO', ic: '💥', col: '#ff5533',
+      desc: 'Enemigos derrotados explotan dañando a rivales adyacentes.'
+    },
+    heavy_gravity: {
+      id: 'heavy_gravity', name: 'Gravedad Pesada', badge: 'GRAVEDAD', ic: '🪐', col: '#aa44ff',
+      desc: 'Velocidad de nave -15%, pero cada baja otorga +30% más puntos.'
+    },
+    vampiric_shield: {
+      id: 'vampiric_shield', name: 'Drenaje del Vacío', badge: 'DRENAJE', ic: '🩸', col: '#ff0055',
+      desc: 'Eliminar 8 enemigos genera un micro-escudo temporal de protección.'
+    },
+    ricochet_frenzy: {
+      id: 'ricochet_frenzy', name: 'Artillería Ricochet', badge: 'REBOTE', ic: '🔄', col: '#ffe600',
+      desc: 'Todos los disparos del jugador tienen rebotes cinéticos innatos (+2 rebotes).'
+    },
+    supercharged_elites: {
+      id: 'supercharged_elites', name: 'Élites del Caos', badge: 'ÉLITE', ic: '🛡️', col: '#00ffaa',
+      desc: 'Mayor aparición de tropas Élite con +50% de recompensa y gemas.'
+    },
+    glass_cannon: {
+      id: 'glass_cannon', name: 'Cañón de Cristal', badge: 'CRISTAL', ic: '💎', col: '#ff77bb',
+      desc: 'El jugador inflige +40% de daño, pero la invulnerabilidad dura la mitad.'
+    }
+  };
+  var activeMutators = [];
+  var dailyVampKillCount = 0;
+  function getDailyMutators(dateStr) {
+    var dStr = dateStr || getDailyDateStr();
+    var h = Math.abs(hashSeed('neon-void-mutators-' + dStr));
+    var keys = Object.keys(MUTATOR_DEFS);
+    var idx1 = h % keys.length;
+    var idx2 = ((h >> 4) + 1 + ((h >> 8) % (keys.length - 1))) % keys.length;
+    if (idx1 === idx2) idx2 = (idx1 + 1) % keys.length;
+    return [MUTATOR_DEFS[keys[idx1]], MUTATOR_DEFS[keys[idx2]]];
+  }
+  function hasMutator(id) {
+    if (gameMode !== 'daily' || !activeMutators) return false;
+    for (var i = 0; i < activeMutators.length; i++) {
+      if (activeMutators[i] && activeMutators[i].id === id) return true;
+    }
+    return false;
+  }
   try {
     var savedMode = localStorage.getItem('nd_mode');
     if (savedMode && ['camp', 'endless', 'bossrush', 'daily', 'coop'].indexOf(savedMode) >= 0) {
@@ -1731,9 +1779,9 @@
       ['vortex', L >= 13 ? Math.min(20, (L - 12) * 3) : 0],
       ['charger', L >= 16 ? Math.min(18, (L - 15) * 3) : 0],
       ['prism', L >= 20 ? Math.min(18, (L - 19) * 3) : 0],
-      ['aegis', L >= 7 ? Math.min(18, (L - 6) * 3) : 0],
-      ['healer', L >= 8 ? Math.min(16, (L - 7) * 2.5) : 0],
-      ['minelayer', L >= 11 ? Math.min(16, (L - 10) * 2.5) : 0]
+      ['aegis', L >= 7 ? Math.min(18, (L - 6) * 3) * (hasMutator('supercharged_elites') ? 2 : 1) : 0],
+      ['healer', L >= 8 ? Math.min(16, (L - 7) * 2.5) * (hasMutator('supercharged_elites') ? 2 : 1) : 0],
+      ['minelayer', L >= 11 ? Math.min(16, (L - 10) * 2.5) * (hasMutator('supercharged_elites') ? 2 : 1) : 0]
     ], tot = 0, i, x;
     for (i = 0; i < tb.length; i++) tot += tb[i][1];
     x = rnd() * tot;
@@ -1772,7 +1820,7 @@
 
   function makePlayer(i, n) {
     var px = n === 2 ? (i === 0 ? W * 0.33 : W * 0.67) : W / 2;
-    return { id: i, x: px, y: H - 110, vx: 0, vy: 0, r: 16, hitR: 8, bank: 0, alive: true, score: 0, lives: Math.min(MAX_LIVES, 3 + up.life), weapon: cheat.wpn ? 6 : 1 + up.wpn, evolvedWpn: null, shieldT: 0, shieldMax: 8, rfT: 0, rfMax: 8, c2T: 0, c2Max: 10, magT: 0, magMax: 8, superT: 0, supCd: 0, supAng: 0, invT: 1.5, fireCd: 0.3, abCd: 1.5, abT: 0, abInv: 0, dashT: 0, dashVx: 0, dashVy: 0, trail: [], combo: 0, comboBest: 0, comboPop: 0, revived: false, keys: keyState[i], pad: padState[i], drones: 0, grazeCount: 0, grazeT: 0, runLv: 1, runXp: 0, runNextXp: 90, perks: {}, perkCount: 0, shotCount: 0, surgeKills: 0 };
+    return { id: i, x: px, y: H - 110, vx: 0, vy: 0, r: 16, hitR: 8, bank: 0, alive: true, score: 0, lives: Math.min(MAX_LIVES, 3 + up.life), weapon: cheat.wpn ? 6 : 1 + up.wpn, evolvedWpn: null, empSlow: 0, shieldT: 0, shieldMax: 8, rfT: 0, rfMax: 8, c2T: 0, c2Max: 10, magT: 0, magMax: 8, superT: 0, supCd: 0, supAng: 0, invT: 1.5, fireCd: 0.3, abCd: 1.5, abT: 0, abInv: 0, dashT: 0, dashVx: 0, dashVy: 0, trail: [], combo: 0, comboBest: 0, comboPop: 0, revived: false, keys: keyState[i], pad: padState[i], drones: 0, grazeCount: 0, grazeT: 0, runLv: 1, runXp: 0, runNextXp: 90, perks: {}, perkCount: 0, shotCount: 0, surgeKills: 0 };
   }
   function totalScore() { var t = 0; for (var i = 0; i < players.length; i++) t += players[i].score; return t; }
   function anyAlive() { for (var i = 0; i < players.length; i++) if (players[i].alive) return true; return false; }
@@ -2015,6 +2063,8 @@
   function startDailyWave(w) {
     dailyWave = w;
     level = w;
+    activeMutators = getDailyMutators();
+    if (w === 1) dailyVampKillCount = 0;
     var isBoss = (w % 10 === 0);
     var effL = 1 + Math.floor((w - 1) / 2);
     startLevel(effL, isBoss, w);
@@ -2130,7 +2180,12 @@
   }
   function pShot(x, y, a, o, op) {
     op = op || {}; var sp = op.sp || 820;
-    pBullets.push({ x: x, y: y, vx: Math.sin(a) * sp, vy: -Math.cos(a) * sp, sp: sp, r: op.r || 4, o: o, el: op.el || 0, dmg: op.dmg || 1, pierce: op.pierce || 0, home: op.home || 0, chain: op.chain || 0, dr: op.dr || 0.9, life: op.life, bounces: op.bounces || 0, maxBounces: op.maxBounces, evo: op.evo, colRgb: op.colRgb, flameSplash: op.flameSplash, freezeTouch: op.freezeTouch, leech: op.leech, miniPull: op.miniPull });
+    var finalDmg = (op.dmg || 1) * (hasMutator('glass_cannon') ? 1.4 : 1);
+    var finalBounces = op.maxBounces;
+    if (hasMutator('ricochet_frenzy')) {
+      finalBounces = Math.max(finalBounces || 0, 2);
+    }
+    pBullets.push({ x: x, y: y, vx: Math.sin(a) * sp, vy: -Math.cos(a) * sp, sp: sp, r: op.r || 4, o: o, el: op.el || 0, dmg: +finalDmg.toFixed(1), pierce: op.pierce || 0, home: op.home || 0, chain: op.chain || 0, dr: op.dr || 0.9, life: op.life, bounces: op.bounces || 0, maxBounces: finalBounces, evo: op.evo, colRgb: op.colRgb, flameSplash: op.flameSplash, freezeTouch: op.freezeTouch, leech: op.leech, miniPull: op.miniPull });
   }
   function chainZap(from, hops, o) {
     var cur = from, seen = [from], h, k, best, bd, t, dx, dy;
@@ -2755,171 +2810,6 @@
     }
   }
 
-  // Minas de interdicción y enemigos tácticos élite (Paso 4)
-  function spawnDisruptionMine(x, y) {
-    if (disruptionMines.length >= 14) return;
-    disruptionMines.push({
-      x: x, y: y,
-      vx: (Math.random() - 0.5) * 16,
-      vy: 24 + Math.random() * 18,
-      r: 12, hp: 2, maxhp: 2,
-      t: Math.random() * TAU,
-      pulse: Math.random() * TAU
-    });
-  }
-
-  function explodeDisruptionMine(idx, p) {
-    var dm = disruptionMines[idx];
-    if (!dm) return;
-    disruptionMines.splice(idx, 1);
-    explosionSound(0.6);
-    addP({ t: 'ring', x: dm.x, y: dm.y, r: 55, c: '#ffaa00', life: 0.4 });
-    sparksAt(dm.x, dm.y, 14, [255, 170, 40]);
-    if (p && p.alive) {
-      p.score += 25;
-      if (Math.random() < 0.4) dropCoins({ x: dm.x, y: dm.y, v: 0 });
-    }
-    for (var q = 0; q < players.length; q++) {
-      var P = players[q];
-      if (!P.alive) continue;
-      var ddx = P.x - dm.x, ddy = P.y - dm.y;
-      if (ddx * ddx + ddy * ddy < 55 * 55) {
-        if (P.invT <= 0 && P.enterT <= 0) {
-          P.empSlow = 2.0;
-          floatTxt(P.x, P.y - 25, '¡PULSO EMP -45% VEL!', '#ffaa00', 14, { vx: 0, vy: -40, life: 1.0 });
-          sparksAt(P.x, P.y, 8, [255, 180, 50]);
-        }
-      }
-    }
-  }
-
-  function updateDisruptionMines(dt) {
-    for (var i = disruptionMines.length - 1; i >= 0; i--) {
-      var dm = disruptionMines[i];
-      dm.t += dt;
-      dm.pulse = (dm.pulse + dt * 4.5) % TAU;
-      dm.x += dm.vx * dt + Math.sin(dm.t * 2) * 14 * dt;
-      dm.y += dm.vy * dt;
-      if (dm.x < dm.r) { dm.x = dm.r; dm.vx = Math.abs(dm.vx); }
-      else if (dm.x > W - dm.r) { dm.x = W - dm.r; dm.vx = -Math.abs(dm.vx); }
-      if (dm.y > H + 30) { disruptionMines.splice(i, 1); continue; }
-      for (var q = 0; q < players.length; q++) {
-        var P = players[q];
-        if (!P.alive) continue;
-        var dx = P.x - dm.x, dy = P.y - dm.y;
-        if (dx * dx + dy * dy < (dm.r + P.hitR + 6) * (dm.r + P.hitR + 6)) {
-          explodeDisruptionMine(i, P);
-          break;
-        }
-      }
-    }
-  }
-
-  function drawDisruptionMines() {
-    for (var i = 0; i < disruptionMines.length; i++) {
-      var dm = disruptionMines[i];
-      ctx.save();
-      ctx.translate(dm.x, dm.y);
-      var pulse = 0.5 + 0.5 * Math.sin(dm.pulse);
-      ctx.beginPath();
-      ctx.arc(0, 0, dm.r + 3 + pulse * 3, 0, TAU);
-      ctx.fillStyle = 'rgba(255, 170, 0, ' + (0.15 + pulse * 0.15) + ')';
-      ctx.fill();
-      ctx.strokeStyle = '#ffaa00';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(0, 0, dm.r, 0, TAU);
-      ctx.fillStyle = '#261606';
-      ctx.fill();
-      ctx.stroke();
-      for (var k = 0; k < 4; k++) {
-        var a = (k / 4) * TAU + dm.t * 1.5;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * (dm.r - 2), Math.sin(a) * (dm.r - 2));
-        ctx.lineTo(Math.cos(a) * (dm.r + 4), Math.sin(a) * (dm.r + 4));
-        ctx.stroke();
-      }
-      ctx.fillStyle = pulse > 0.5 ? '#ffffff' : '#ff4400';
-      ctx.beginPath(); ctx.arc(0, 0, 3, 0, TAU); ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  function drawAegis(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = '#0b1a30';
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, r * 0.9);
-    ctx.lineTo(-r * 0.95, -r * 0.2);
-    ctx.lineTo(-r * 0.6, -r * 0.85);
-    ctx.lineTo(r * 0.6, -r * 0.85);
-    ctx.lineTo(r * 0.95, -r * 0.2);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#00a0d0';
-    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.35, 0, TAU); ctx.fill();
-    var chargeGlow = (e.shieldHits || 0) * 0.2;
-    ctx.strokeStyle = rgba([0, 229, 255], 0.7 + chargeGlow);
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.arc(0, r * 0.1, r * 1.35, 0.1, Math.PI - 0.1);
-    ctx.stroke();
-    ctx.fillStyle = '#5de6ff';
-    ctx.fillRect(-r * 1.35, r * 0.05, 5, 8);
-    ctx.fillRect(r * 1.35 - 5, r * 0.05, 5, 8);
-    ctx.restore();
-  }
-
-  function drawHealer(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    var crossArm = r * 0.4, crossLen = r * 0.95;
-    ctx.fillStyle = '#092518';
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.rect(-crossArm, -crossLen, crossArm * 2, crossLen * 2);
-    ctx.rect(-crossLen, -crossArm, crossLen * 2, crossArm * 2);
-    ctx.fill(); ctx.stroke();
-    var pulse = 0.5 + 0.5 * Math.sin(clock * 4.5);
-    ctx.fillStyle = rgba([0, 255, 136], 0.6 + 0.4 * pulse);
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.35, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.18, 0, TAU); ctx.fill();
-    for (var ni = 0; ni < 3; ni++) {
-      var nAng = clock * 3 + ni * (TAU / 3);
-      ctx.fillStyle = '#7dffa0';
-      ctx.beginPath();
-      ctx.arc(Math.cos(nAng) * (r * 1.2), Math.sin(nAng) * (r * 1.2), 3, 0, TAU);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function drawMinelayer(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = '#241408';
-    ctx.strokeStyle = '#ff9900';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, r * 0.95);
-    ctx.lineTo(-r * 0.9, -r * 0.8);
-    ctx.lineTo(r * 0.9, -r * 0.8);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#551122';
-    ctx.fillRect(-r * 0.85, -r * 0.75, 8, 8);
-    ctx.fillRect(r * 0.85 - 8, -r * 0.75, 8, 8);
-    var strobe = Math.sin(clock * 7) > 0.4;
-    ctx.fillStyle = strobe ? '#ffaa00' : '#442200';
-    ctx.beginPath(); ctx.arc(0, -r * 0.1, 4.5, 0, TAU); ctx.fill();
-    ctx.restore();
-  }
-
   // Minas espaciales
   function spawnSpaceMine(x, y) {
     spaceMines.push({
@@ -3427,6 +3317,7 @@
 
   // Movimiento de formación (también se usa en cámara lenta al morir)
   function formationStep(dt, firing) {
+    if (hasMutator('hyper_drive')) dt = dt * 1.15;
     var alive = enemies.length;
     var accel = 1 + (1 - alive / Math.max(1, totalEnemies)) * 0.9;
     ft += dt * curP.sway * accel;
@@ -3501,8 +3392,37 @@
     var s = e.kind === 'boss' ? 2.2 : (e.kind === 'miniboss' ? 1.4 : (e.kind === 'heavy' ? 0.85 : (e.kind === 'splitter' ? 0.75 : 0.6)));
     explode(e.x, e.y, s);
     explosionSound(s);
-    var KO = owner || players[0], gain = Math.round(e.pts * comboMult(KO.combo)), big = e.kind === 'boss' || e.kind === 'miniboss';
+    var mutScoreMult = (hasMutator('heavy_gravity') ? 1.3 : 1) * (hasMutator('supercharged_elites') && (e.kind === 'aegis' || e.kind === 'healer' || e.kind === 'minelayer') ? 1.5 : 1);
+    var KO = owner || players[0], gain = Math.round(e.pts * comboMult(KO.combo) * mutScoreMult), big = e.kind === 'boss' || e.kind === 'miniboss';
     KO.score += gain;
+    if (hasMutator('explosive_plasma')) {
+      addP({ t: 'ring', x: e.x, y: e.y, r: 65, c: '#ff5533', life: 0.28 });
+      sparksAt(e.x, e.y, 10, [255, 85, 51]);
+      for (var oi = 0; oi < enemies.length; oi++) {
+        var oe = enemies[oi];
+        if (oe !== e && oe.entered && oe.y > 0) {
+          var odx = oe.x - e.x, ody = oe.y - e.y;
+          if (odx * odx + ody * ody < 65 * 65) {
+            oe.hp -= 1.5;
+            dmgNum(oe, 1.5, '#ff5533');
+            sparksAt(oe.x, oe.y, 4, [255, 120, 60]);
+          }
+        }
+      }
+    }
+    if (hasMutator('vampiric_shield') && KO && KO.alive) {
+      dailyVampKillCount++;
+      if (dailyVampKillCount >= 8) {
+        dailyVampKillCount = 0;
+        KO.shieldT = Math.max(KO.shieldT, 3.5);
+        floatTxt(KO.x, KO.y - 30, '¡ESCUDO VAMPÍRICO!', '#ff0055', 13, { vx: 0, vy: -40, life: 1.0 });
+        powerSound();
+        sparksAt(KO.x, KO.y, 12, [255, 0, 85]);
+      }
+    }
+    if (hasMutator('supercharged_elites') && (e.kind === 'aegis' || e.kind === 'healer' || e.kind === 'minelayer')) {
+      dropGem(e.x, e.y, 1);
+    }
     var xpGain = e.kind === 'boss' ? 500 : (e.kind === 'miniboss' ? 180 : (e.kind === 'heavy' ? 45 : (e.kind === 'elite' ? 60 : 16)));
     addXp(KO, xpGain);
     if (KO && KO.alive && KO.perks && KO.perks.vampire) {
@@ -3596,7 +3516,7 @@
     var S = shipOf(P);
     if (camp) camp.noDamage = false;
     if (P.shieldT > 0) {
-      P.shieldT = 0; P.invT = 0.8 + (S.invBonus || 0) * 0.5;
+      P.shieldT = 0; P.invT = (0.8 + (S.invBonus || 0) * 0.5) * (hasMutator('glass_cannon') ? 0.5 : 1);
       addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.45, maxR: 60, col: [0, 229, 255] });
       sparksAt(P.x, P.y, 18, [120, 240, 255]);
       return;
@@ -3626,7 +3546,7 @@
       clearNear(P);
       return;
     }
-    P.invT = 2.2 + (S.invBonus || 0); shake = 0.35; flash = 0.3;
+    P.invT = (2.2 + (S.invBonus || 0)) * (hasMutator('glass_cannon') ? 0.5 : 1); shake = 0.35; flash = 0.3;
     explode(P.x, P.y, 0.7);
     explosionSound(0.6);
     clearNear(P);
@@ -3847,7 +3767,9 @@
     var S = shipOf(P);
     if (P.grazeT > 0) P.grazeT -= dt;
     var dx = Math.max(-1, Math.min(1, (K.right ? 1 : 0) - (K.left ? 1 : 0) + pd.x)), dy = Math.max(-1, Math.min(1, (K.down ? 1 : 0) - (K.up ? 1 : 0) + pd.y));
-    var axx = 0, ayy = 0, maxV = 560 * (S.spdMult || 1) * (1 + ((P.perks && P.perks.speed) || 0) * 0.18);
+    if (P.empSlow > 0) P.empSlow -= dt;
+    var mutSpd = (hasMutator('hyper_drive') ? 1.25 : 1) * (hasMutator('heavy_gravity') ? 0.85 : 1);
+    var axx = 0, ayy = 0, maxV = 560 * (S.spdMult || 1) * (1 + ((P.perks && P.perks.speed) || 0) * 0.18) * (P.empSlow > 0 ? 0.55 : 1) * mutSpd;
     if (dx) { axx = dx * 3200; if (one) mouseT = null; P.vx *= Math.pow(0.35, dt); }
     if (dy) { ayy = dy * 3000; if (one) mouseT = null; P.vy *= Math.pow(0.35, dt); }
     if (!dx && !dy && one && mouseT) {
@@ -3912,7 +3834,7 @@
       playerShoot(P);
       var rapidMult = 1 / (1 + ((P.perks && P.perks.rapid) || 0) * 0.2);
       var evoCdMult = (P.evolvedWpn === 'hyperphotonic_beam') ? 0.65 : 1;
-      P.fireCd = EL[elOf(P)].cd * (P.rfT > 0 ? 0.53 : 1) * (P.abT > 0 && abOf(P) === 3 ? 0.45 : 1) * rapidMult * evoCdMult;
+      P.fireCd = EL[elOf(P)].cd * (P.rfT > 0 ? 0.53 : 1) * (P.abT > 0 && abOf(P) === 3 ? 0.45 : 1) * rapidMult * evoCdMult * (hasMutator('hyper_drive') ? 0.8 : 1);
     }
     if (K.ab) { K.ab = false; if (!useAbility(P) && P.abCd > 0) tone(150, 0.06, 'square', 0.025, 0); }
   }
@@ -3938,6 +3860,7 @@
     formationStep(edt, true);
     updateAsteroids(edt);
     updateSpaceMines(edt);
+    updateDisruptionMines(edt);
     updateCosmicEvents(edt);
     if (bossTelegraph) {
       bossTelegraph.t -= dt;
@@ -4064,12 +3987,44 @@
         }
         if (pBullets[i] !== b) continue;
       }
+      if (disruptionMines.length) {
+        for (j = 0; j < disruptionMines.length; j++) {
+          var dm = disruptionMines[j];
+          ddx = b.x - dm.x; ddy = b.y - dm.y; rr = dm.r + b.r;
+          if (ddx * ddx + ddy * ddy < rr * rr) {
+            dm.hp -= (b.dmg || 1);
+            sparksAt(b.x, b.y, 4, [255, 160, 40]); hitSound();
+            var gone = b.pierce <= 0;
+            if (gone) pBullets.splice(i, 1); else { b.pierce--; }
+            if (dm.hp <= 0) { explodeDisruptionMine(j, b.o); j--; }
+            if (gone) break;
+          }
+        }
+        if (pBullets[i] !== b) continue;
+      }
       for (j = 0; j < enemies.length; j++) {
         e = enemies[j];
         if (e.y < -e.r * 0.5) continue;
         ddx = b.x - e.x; ddy = b.y - e.y; rr = e.r * (e.kind === 'boss' ? 0.95 : 0.9) + b.r;
         if (ddx * ddx + ddy * ddy < rr * rr) {
           if (b.hl && b.hl.indexOf(e) >= 0) continue;
+          if (e.kind === 'aegis' && b.y > e.y - 2 && (b.pierce || 0) < 99) {
+            e.shieldHits = (e.shieldHits || 0) + 1;
+            addP({ t: 'ring', x: b.x, y: b.y, r: 24, c: '#00e5ff', life: 0.22 });
+            sparksAt(b.x, b.y, 6, [0, 229, 255]);
+            hitSound();
+            floatTxt(e.x, e.y - 12, '¡BLOQUEO!', '#00e5ff', 12, { vx: 0, vy: -35, life: 0.5 });
+            if (e.shieldHits >= 4) {
+              e.shieldHits = 0;
+              for (var cbi = -2; cbi <= 2; cbi++) {
+                eShot(e.x, e.y + 12, Math.PI / 2 + cbi * 0.22, 280, [0, 230, 255], 5.5);
+              }
+              powerSound();
+              shake = Math.max(shake, 0.25);
+            }
+            pBullets.splice(i, 1);
+            break;
+          }
           var elMult = 1 + (up.el || 0) * 0.2;
           var dealt = +((b.dmg + (e.frz > 0 ? 1 : 0)) * elMult).toFixed(1);
           var isCrit = false;
@@ -5277,171 +5232,6 @@
     }
   }
 
-  // Minas de interdicción y enemigos tácticos élite (Paso 4)
-  function spawnDisruptionMine(x, y) {
-    if (disruptionMines.length >= 14) return;
-    disruptionMines.push({
-      x: x, y: y,
-      vx: (Math.random() - 0.5) * 16,
-      vy: 24 + Math.random() * 18,
-      r: 12, hp: 2, maxhp: 2,
-      t: Math.random() * TAU,
-      pulse: Math.random() * TAU
-    });
-  }
-
-  function explodeDisruptionMine(idx, p) {
-    var dm = disruptionMines[idx];
-    if (!dm) return;
-    disruptionMines.splice(idx, 1);
-    explosionSound(0.6);
-    addP({ t: 'ring', x: dm.x, y: dm.y, r: 55, c: '#ffaa00', life: 0.4 });
-    sparksAt(dm.x, dm.y, 14, [255, 170, 40]);
-    if (p && p.alive) {
-      p.score += 25;
-      if (Math.random() < 0.4) dropCoins({ x: dm.x, y: dm.y, v: 0 });
-    }
-    for (var q = 0; q < players.length; q++) {
-      var P = players[q];
-      if (!P.alive) continue;
-      var ddx = P.x - dm.x, ddy = P.y - dm.y;
-      if (ddx * ddx + ddy * ddy < 55 * 55) {
-        if (P.invT <= 0 && P.enterT <= 0) {
-          P.empSlow = 2.0;
-          floatTxt(P.x, P.y - 25, '¡PULSO EMP -45% VEL!', '#ffaa00', 14, { vx: 0, vy: -40, life: 1.0 });
-          sparksAt(P.x, P.y, 8, [255, 180, 50]);
-        }
-      }
-    }
-  }
-
-  function updateDisruptionMines(dt) {
-    for (var i = disruptionMines.length - 1; i >= 0; i--) {
-      var dm = disruptionMines[i];
-      dm.t += dt;
-      dm.pulse = (dm.pulse + dt * 4.5) % TAU;
-      dm.x += dm.vx * dt + Math.sin(dm.t * 2) * 14 * dt;
-      dm.y += dm.vy * dt;
-      if (dm.x < dm.r) { dm.x = dm.r; dm.vx = Math.abs(dm.vx); }
-      else if (dm.x > W - dm.r) { dm.x = W - dm.r; dm.vx = -Math.abs(dm.vx); }
-      if (dm.y > H + 30) { disruptionMines.splice(i, 1); continue; }
-      for (var q = 0; q < players.length; q++) {
-        var P = players[q];
-        if (!P.alive) continue;
-        var dx = P.x - dm.x, dy = P.y - dm.y;
-        if (dx * dx + dy * dy < (dm.r + P.hitR + 6) * (dm.r + P.hitR + 6)) {
-          explodeDisruptionMine(i, P);
-          break;
-        }
-      }
-    }
-  }
-
-  function drawDisruptionMines() {
-    for (var i = 0; i < disruptionMines.length; i++) {
-      var dm = disruptionMines[i];
-      ctx.save();
-      ctx.translate(dm.x, dm.y);
-      var pulse = 0.5 + 0.5 * Math.sin(dm.pulse);
-      ctx.beginPath();
-      ctx.arc(0, 0, dm.r + 3 + pulse * 3, 0, TAU);
-      ctx.fillStyle = 'rgba(255, 170, 0, ' + (0.15 + pulse * 0.15) + ')';
-      ctx.fill();
-      ctx.strokeStyle = '#ffaa00';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(0, 0, dm.r, 0, TAU);
-      ctx.fillStyle = '#261606';
-      ctx.fill();
-      ctx.stroke();
-      for (var k = 0; k < 4; k++) {
-        var a = (k / 4) * TAU + dm.t * 1.5;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * (dm.r - 2), Math.sin(a) * (dm.r - 2));
-        ctx.lineTo(Math.cos(a) * (dm.r + 4), Math.sin(a) * (dm.r + 4));
-        ctx.stroke();
-      }
-      ctx.fillStyle = pulse > 0.5 ? '#ffffff' : '#ff4400';
-      ctx.beginPath(); ctx.arc(0, 0, 3, 0, TAU); ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  function drawAegis(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = '#0b1a30';
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, r * 0.9);
-    ctx.lineTo(-r * 0.95, -r * 0.2);
-    ctx.lineTo(-r * 0.6, -r * 0.85);
-    ctx.lineTo(r * 0.6, -r * 0.85);
-    ctx.lineTo(r * 0.95, -r * 0.2);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#00a0d0';
-    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.35, 0, TAU); ctx.fill();
-    var chargeGlow = (e.shieldHits || 0) * 0.2;
-    ctx.strokeStyle = rgba([0, 229, 255], 0.7 + chargeGlow);
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.arc(0, r * 0.1, r * 1.35, 0.1, Math.PI - 0.1);
-    ctx.stroke();
-    ctx.fillStyle = '#5de6ff';
-    ctx.fillRect(-r * 1.35, r * 0.05, 5, 8);
-    ctx.fillRect(r * 1.35 - 5, r * 0.05, 5, 8);
-    ctx.restore();
-  }
-
-  function drawHealer(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    var crossArm = r * 0.4, crossLen = r * 0.95;
-    ctx.fillStyle = '#092518';
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.rect(-crossArm, -crossLen, crossArm * 2, crossLen * 2);
-    ctx.rect(-crossLen, -crossArm, crossLen * 2, crossArm * 2);
-    ctx.fill(); ctx.stroke();
-    var pulse = 0.5 + 0.5 * Math.sin(clock * 4.5);
-    ctx.fillStyle = rgba([0, 255, 136], 0.6 + 0.4 * pulse);
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.35, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.18, 0, TAU); ctx.fill();
-    for (var ni = 0; ni < 3; ni++) {
-      var nAng = clock * 3 + ni * (TAU / 3);
-      ctx.fillStyle = '#7dffa0';
-      ctx.beginPath();
-      ctx.arc(Math.cos(nAng) * (r * 1.2), Math.sin(nAng) * (r * 1.2), 3, 0, TAU);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function drawMinelayer(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = '#241408';
-    ctx.strokeStyle = '#ff9900';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, r * 0.95);
-    ctx.lineTo(-r * 0.9, -r * 0.8);
-    ctx.lineTo(r * 0.9, -r * 0.8);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#551122';
-    ctx.fillRect(-r * 0.85, -r * 0.75, 8, 8);
-    ctx.fillRect(r * 0.85 - 8, -r * 0.75, 8, 8);
-    var strobe = Math.sin(clock * 7) > 0.4;
-    ctx.fillStyle = strobe ? '#ffaa00' : '#442200';
-    ctx.beginPath(); ctx.arc(0, -r * 0.1, 4.5, 0, TAU); ctx.fill();
-    ctx.restore();
-  }
-
   function drawSplitter(e) {
     var r = e.r, cp = 0.5 + 0.5 * Math.sin(clock * 6 + e.ph);
     var sep = r * (0.44 + 0.05 * Math.sin(clock * 8 + e.ph));
@@ -5815,6 +5605,9 @@
     else if (e.kind === 'vortex') drawVortex(e);
     else if (e.kind === 'charger') drawCharger(e);
     else if (e.kind === 'prism') drawPrism(e);
+    else if (e.kind === 'aegis') drawAegis(e);
+    else if (e.kind === 'healer') drawHealer(e);
+    else if (e.kind === 'minelayer') drawMinelayer(e);
     else if (e.kind === 'heavy') drawHeavy(e);
     else if (e.kind === 'gunner') drawFighter(e);
     else if (e.kind === 'weaver') drawWeaver(e);
@@ -6098,171 +5891,6 @@
       ctx.restore();
     }
   }
-
-  // Minas de interdicción y enemigos tácticos élite (Paso 4)
-  function spawnDisruptionMine(x, y) {
-    if (disruptionMines.length >= 14) return;
-    disruptionMines.push({
-      x: x, y: y,
-      vx: (Math.random() - 0.5) * 16,
-      vy: 24 + Math.random() * 18,
-      r: 12, hp: 2, maxhp: 2,
-      t: Math.random() * TAU,
-      pulse: Math.random() * TAU
-    });
-  }
-
-  function explodeDisruptionMine(idx, p) {
-    var dm = disruptionMines[idx];
-    if (!dm) return;
-    disruptionMines.splice(idx, 1);
-    explosionSound(0.6);
-    addP({ t: 'ring', x: dm.x, y: dm.y, r: 55, c: '#ffaa00', life: 0.4 });
-    sparksAt(dm.x, dm.y, 14, [255, 170, 40]);
-    if (p && p.alive) {
-      p.score += 25;
-      if (Math.random() < 0.4) dropCoins({ x: dm.x, y: dm.y, v: 0 });
-    }
-    for (var q = 0; q < players.length; q++) {
-      var P = players[q];
-      if (!P.alive) continue;
-      var ddx = P.x - dm.x, ddy = P.y - dm.y;
-      if (ddx * ddx + ddy * ddy < 55 * 55) {
-        if (P.invT <= 0 && P.enterT <= 0) {
-          P.empSlow = 2.0;
-          floatTxt(P.x, P.y - 25, '¡PULSO EMP -45% VEL!', '#ffaa00', 14, { vx: 0, vy: -40, life: 1.0 });
-          sparksAt(P.x, P.y, 8, [255, 180, 50]);
-        }
-      }
-    }
-  }
-
-  function updateDisruptionMines(dt) {
-    for (var i = disruptionMines.length - 1; i >= 0; i--) {
-      var dm = disruptionMines[i];
-      dm.t += dt;
-      dm.pulse = (dm.pulse + dt * 4.5) % TAU;
-      dm.x += dm.vx * dt + Math.sin(dm.t * 2) * 14 * dt;
-      dm.y += dm.vy * dt;
-      if (dm.x < dm.r) { dm.x = dm.r; dm.vx = Math.abs(dm.vx); }
-      else if (dm.x > W - dm.r) { dm.x = W - dm.r; dm.vx = -Math.abs(dm.vx); }
-      if (dm.y > H + 30) { disruptionMines.splice(i, 1); continue; }
-      for (var q = 0; q < players.length; q++) {
-        var P = players[q];
-        if (!P.alive) continue;
-        var dx = P.x - dm.x, dy = P.y - dm.y;
-        if (dx * dx + dy * dy < (dm.r + P.hitR + 6) * (dm.r + P.hitR + 6)) {
-          explodeDisruptionMine(i, P);
-          break;
-        }
-      }
-    }
-  }
-
-  function drawDisruptionMines() {
-    for (var i = 0; i < disruptionMines.length; i++) {
-      var dm = disruptionMines[i];
-      ctx.save();
-      ctx.translate(dm.x, dm.y);
-      var pulse = 0.5 + 0.5 * Math.sin(dm.pulse);
-      ctx.beginPath();
-      ctx.arc(0, 0, dm.r + 3 + pulse * 3, 0, TAU);
-      ctx.fillStyle = 'rgba(255, 170, 0, ' + (0.15 + pulse * 0.15) + ')';
-      ctx.fill();
-      ctx.strokeStyle = '#ffaa00';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(0, 0, dm.r, 0, TAU);
-      ctx.fillStyle = '#261606';
-      ctx.fill();
-      ctx.stroke();
-      for (var k = 0; k < 4; k++) {
-        var a = (k / 4) * TAU + dm.t * 1.5;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * (dm.r - 2), Math.sin(a) * (dm.r - 2));
-        ctx.lineTo(Math.cos(a) * (dm.r + 4), Math.sin(a) * (dm.r + 4));
-        ctx.stroke();
-      }
-      ctx.fillStyle = pulse > 0.5 ? '#ffffff' : '#ff4400';
-      ctx.beginPath(); ctx.arc(0, 0, 3, 0, TAU); ctx.fill();
-      ctx.restore();
-    }
-  }
-
-  function drawAegis(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = '#0b1a30';
-    ctx.strokeStyle = '#00f0ff';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, r * 0.9);
-    ctx.lineTo(-r * 0.95, -r * 0.2);
-    ctx.lineTo(-r * 0.6, -r * 0.85);
-    ctx.lineTo(r * 0.6, -r * 0.85);
-    ctx.lineTo(r * 0.95, -r * 0.2);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#00a0d0';
-    ctx.beginPath(); ctx.arc(0, -r * 0.1, r * 0.35, 0, TAU); ctx.fill();
-    var chargeGlow = (e.shieldHits || 0) * 0.2;
-    ctx.strokeStyle = rgba([0, 229, 255], 0.7 + chargeGlow);
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.arc(0, r * 0.1, r * 1.35, 0.1, Math.PI - 0.1);
-    ctx.stroke();
-    ctx.fillStyle = '#5de6ff';
-    ctx.fillRect(-r * 1.35, r * 0.05, 5, 8);
-    ctx.fillRect(r * 1.35 - 5, r * 0.05, 5, 8);
-    ctx.restore();
-  }
-
-  function drawHealer(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    var crossArm = r * 0.4, crossLen = r * 0.95;
-    ctx.fillStyle = '#092518';
-    ctx.strokeStyle = '#00ff88';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.rect(-crossArm, -crossLen, crossArm * 2, crossLen * 2);
-    ctx.rect(-crossLen, -crossArm, crossLen * 2, crossArm * 2);
-    ctx.fill(); ctx.stroke();
-    var pulse = 0.5 + 0.5 * Math.sin(clock * 4.5);
-    ctx.fillStyle = rgba([0, 255, 136], 0.6 + 0.4 * pulse);
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.35, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath(); ctx.arc(0, 0, r * 0.18, 0, TAU); ctx.fill();
-    for (var ni = 0; ni < 3; ni++) {
-      var nAng = clock * 3 + ni * (TAU / 3);
-      ctx.fillStyle = '#7dffa0';
-      ctx.beginPath();
-      ctx.arc(Math.cos(nAng) * (r * 1.2), Math.sin(nAng) * (r * 1.2), 3, 0, TAU);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  function drawMinelayer(e) {
-    var x = e.x, y = e.y, r = e.r;
-    ctx.save(); ctx.translate(x, y);
-    ctx.fillStyle = '#241408';
-    ctx.strokeStyle = '#ff9900';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(0, r * 0.95);
-    ctx.lineTo(-r * 0.9, -r * 0.8);
-    ctx.lineTo(r * 0.9, -r * 0.8);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#551122';
-    ctx.fillRect(-r * 0.85, -r * 0.75, 8, 8);
-    ctx.fillRect(r * 0.85 - 8, -r * 0.75, 8, 8);
-    var strobe = Math.sin(clock * 7) > 0.4;
-    ctx.fillStyle = strobe ? '#ffaa00' : '#442200';
-    ctx.beginPath(); ctx.arc(0, -r * 0.1, 4.5, 0, TAU); ctx.fill();
-    ctx.restore();
-  }
   function drawBossTelegraph() {
     if (!bossTelegraph) return;
     ctx.save();
@@ -6487,6 +6115,25 @@
       ctx.fillStyle = xg; ctx.fillRect(xpX, xpY, Math.floor(xpW * xpRatio), xpH);
       ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)'; ctx.lineWidth = 1; ctx.strokeRect(xpX, xpY, xpW, xpH);
       text('NV ' + (P0.runLv || 1) + ' · XP ' + curXp + '/' + nextXp, W / 2, xpY - 4, 10, '#00f0ff', 'center');
+
+      // Badges de Mutadores del Vacío en Modo Diario
+      if (gameMode === 'daily' && activeMutators && activeMutators.length) {
+        var mtx = Math.floor(W / 2) - ((activeMutators.length - 1) * 65);
+        var mty = xpY + 16;
+        for (var mi = 0; mi < activeMutators.length; mi++) {
+          var mut = activeMutators[mi];
+          if (!mut) continue;
+          ctx.save();
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+          ctx.fillRect(mtx - 58, mty - 7, 116, 16);
+          ctx.strokeStyle = mut.col;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(mtx - 58, mty - 7, 116, 16);
+          text(mut.ic + ' ' + mut.badge, mtx, mty + 5, 9, mut.col, 'center');
+          ctx.restore();
+          mtx += 125;
+        }
+      }
 
       // Badges de perks activos
       if (P0.perks) {
@@ -6759,7 +6406,9 @@
       text('Mejor racha: ' + brB.bosses + ' jefes derrotados (' + brB.score + ' pts)', W / 2, iy + 26, 11, '#ffcf60');
     } else if (gameMode === 'daily') {
       var dbB = getDailyBest();
-      text('📅 Semilla fija para hoy (' + getDailyDateStr() + ') · Todos compiten igual', W / 2, iy + 10, 12, '#b0ffd8');
+      var dMuts = getDailyMutators();
+      text('📅 Semilla fija para hoy (' + getDailyDateStr() + ') · Todos compiten igual', W / 2, iy + 8, 12, '#b0ffd8');
+      text('MUTADORES: ' + dMuts[0].ic + ' ' + dMuts[0].name + ' (' + dMuts[0].badge + ')  ·  ' + dMuts[1].ic + ' ' + dMuts[1].name + ' (' + dMuts[1].badge + ')', W / 2, iy + 24, 11, '#40ffb0');
       text('Récord de hoy: ' + (dbB.score ? dbB.score + ' pts (Oleada ' + dbB.wave + ')' : '¡Juega tu intento de hoy!'), W / 2, iy + 26, 11, '#7df0ff');
     } else if (gameMode === 'coop') {
       text('👥 Comparte pantalla y teclado o mandos en cooperativo', W / 2, iy + 10, 12, '#b0d0ff');
@@ -7609,6 +7258,7 @@
       drawCosmicBackground();
       drawAsteroids();
       drawSpaceMines();
+      drawDisruptionMines();
       drawBossTelegraph();
       for (i = 0; i < enemies.length; i++) { drawEnemy(enemies[i]); drawStatus(enemies[i]); }
       drawBullets();
@@ -7681,4 +7331,957 @@
       var hcx = W - 36, hcy = 38;
       menuBtns.push({ x: hcx - 28, y: 6, w: 56, h: 68, help: true });
       ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.arc(hcx, hcy, 18, 0, TAU); ctx.fill();
-... [truncated for diff preview]
+      ctx.strokeStyle = '#8ff6ff'; ctx.lineWidth = 2; ctx.stroke();
+      text('?', hcx, hcy + 8, 22, '#ffffff');
+      text('AYUDA', hcx, hcy + 34, 10, '#8a8aa8');
+    } else if (state === 'shop') {
+      drawShop();
+    } else if (state === 'map') {
+      drawMap();
+    } else if (state === 'code') {
+      drawCode();
+    } else if (state === 'help') {
+      drawHelp();
+    } else if (state === 'settings') {
+      drawSettings();
+    } else if (state === 'paused') {
+      ctx.fillStyle = 'rgba(0,0,0,0.68)'; ctx.fillRect(0, 0, W, H);
+      var sec = sectorOf(level);
+      glow('#00f5ff', 16);
+      text('PAUSA', W / 2, H * 0.22, 46, '#00f5ff');
+      noGlow();
+      text('SECTOR ' + sec.id + ': ' + sec.name, W / 2, H * 0.22 + 32, 14, sec.col);
+      var wNum = curP ? curP.waveNum : 1;
+      text('NIVEL ' + level + '  ·  OLEADA ' + wNum + ' / 10', W / 2, H * 0.22 + 54, 13, '#b0b0d0');
+
+      var curScore = camp ? camp.levelScore : totalScore();
+      var tgtScore = targetScoreForLevel(level);
+      var noDmg = camp ? camp.noDamage : false;
+      text('⭐1: Superar nivel  ·  ⭐2: ' + curScore + '/' + tgtScore + ' pts  ·  ⭐3: ' + (noDmg ? '⭐ Sin daño' : '❌ Dañado'), W / 2, H * 0.22 + 78, 11.5, '#ffd54a');
+
+      pauseBtns = [
+        { x: W / 2 - 110, y: H * 0.22 + 98, w: 220, h: 36, act: 'resume' },
+        { x: W / 2 - 110, y: H * 0.22 + 142, w: 220, h: 36, act: 'restart' },
+        { x: W / 2 - 110, y: H * 0.22 + 186, w: 220, h: 36, act: 'settings' },
+        { x: W / 2 - 110, y: H * 0.22 + 230, w: 220, h: 36, act: 'exit' }
+      ];
+      var btnLabels = [
+        { t: 'CONTINUAR (P / ESC)', c: '#00f5ff' },
+        { t: 'REINICIAR (R)', c: '#ffd54a' },
+        { t: 'AJUSTES (O)', c: '#d060ff' },
+        { t: 'SALIR AL MENÚ (Q)', c: '#ff5a8a' }
+      ];
+      pauseBtns.forEach(function (b, idx) {
+        ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = btnLabels[idx].c; ctx.lineWidth = 1.6; ctx.strokeRect(b.x, b.y, b.w, b.h);
+        text(btnLabels[idx].t, W / 2, b.y + 23, 13.5, '#ffffff');
+      });
+
+      var py = H * 0.22 + 285;
+      var pausedP = players[0];
+      var activePerks = pausedP && pausedP.perks ? Object.keys(pausedP.perks).filter(function (id) { return pausedP.perks[id] > 0; }) : [];
+      text('── MEJORAS DE ESTA PARTIDA (NV ' + (pausedP ? pausedP.runLv || 1 : 1) + ') ──', W / 2, py, 12, '#00f0ff', 'center');
+      if (activePerks.length === 0) {
+        text('Aún no has elegido mejoras en esta partida. ¡Sube de nivel destruyendo enemigos!', W / 2, py + 22, 11, '#7a8ba8', 'center');
+      } else {
+        var pColW = Math.min(220, (W - 32) / 2);
+        for (var pki = 0; pki < activePerks.length && pki < 6; pki++) {
+          var pkId = activePerks[pki];
+          var pkDef = PERK_DEFS.find(function (d) { return d.id === pkId; });
+          var pkLv = pausedP.perks[pkId];
+          if (pkDef) {
+            var colIdx = pki % 2;
+            var rowIdx = Math.floor(pki / 2);
+            var pkX = (W / 2) + (colIdx === 0 ? -pColW : 8);
+            var pkY = py + 16 + rowIdx * 22;
+            var stars = '';
+            for (var s = 0; s < pkLv; s++) stars += '★';
+            text(pkDef.icon + ' ' + pkDef.name + ' ' + stars, pkX, pkY + 11, 11, pkDef.col, 'left');
+          }
+        }
+      }
+    } else if (state === 'over') {
+      var ov = Math.max(0, Math.min(1, (now - overAt - 800) / 500));
+      if (ov > 0) {
+        ctx.fillStyle = 'rgba(0,0,0,' + (0.55 * ov) + ')'; ctx.fillRect(0, 0, W, H);
+        ctx.globalAlpha = ov;
+        text('GAME OVER', W / 2, H * 0.28, Math.min(52, W / 8), '#ff2d95');
+        if (gameMode === 'endless') {
+          text('MODO INFINITO · OLEADA ' + endlessWave, W / 2, H * 0.28 + 38, 19, '#d060ff');
+          text('Puntos: ' + totalScore(), W / 2, H * 0.28 + 66, 24, '#ffffff');
+          text('🏆 RANKING LOCAL (TOP 5)', W / 2, H * 0.28 + 96, 13, '#ffe600');
+          var er = getEndlessRanks();
+          for (var ri = 0; ri < 5; ri++) {
+            var rk = er[ri];
+            var rTxt = (ri + 1) + '. ' + (rk ? (rk.score + ' pts  ·  Oleada ' + rk.wave + '  (' + rk.date + ')') : '---');
+            text(rTxt, W / 2, H * 0.28 + 116 + ri * 17, 12, (rk && rk.score === totalScore() && rk.wave === endlessWave) ? '#00f5ff' : '#9ea2c0');
+          }
+        } else if (gameMode === 'bossrush') {
+          var brDefeated = Math.max(0, bossRushIdx - 1);
+          var brB = getBossRushBest();
+          text('SOLO JEFES · JEFES DERROTADOS: ' + brDefeated, W / 2, H * 0.28 + 42, 19, '#ffaa30');
+          text('Puntos: ' + totalScore(), W / 2, H * 0.28 + 74, 24, '#ffffff');
+          text('Mejor racha: ' + brB.bosses + ' jefes  ·  Récord: ' + brB.score + ' pts', W / 2, H * 0.28 + 106, 16, '#ffe600');
+        } else if (gameMode === 'daily') {
+          var dBest = getDailyBest();
+          text('DESAFÍO DIARIO · ' + getDailyDateStr(), W / 2, H * 0.28 + 42, 18, '#40ffb0');
+          text('Puntos: ' + totalScore() + '  (Oleada ' + dailyWave + ')', W / 2, H * 0.28 + 74, 24, '#ffffff');
+          text('Récord de hoy: ' + dBest.score + ' pts  (Oleada ' + dBest.wave + ')', W / 2, H * 0.28 + 106, 16, '#ffe600');
+        } else if (numPlayers === 2) {
+          text('J1: ' + players[0].score + '     J2: ' + players[1].score, W / 2, H * 0.28 + 46, 22, '#ffffff');
+          text('Total: ' + totalScore(), W / 2, H * 0.28 + 80, 26, '#ffffff');
+          text('Nivel alcanzado: ' + level, W / 2, H * 0.28 + 114, 20, '#9fb4ff');
+          text('Récord: ' + best, W / 2, H * 0.28 + 144, 20, '#ffe600');
+        } else {
+          text('Puntos: ' + totalScore(), W / 2, H * 0.28 + 50, 26, '#ffffff');
+          text('Nivel alcanzado: ' + level, W / 2, H * 0.28 + 84, 20, '#9fb4ff');
+          text('Récord: ' + best, W / 2, H * 0.28 + 114, 20, '#ffe600');
+        }
+        var oBaseY = gameMode === 'endless' ? H * 0.69 : H * 0.62;
+        text(touchMode ? 'Toca la pantalla para reintentar' : (padOn ? 'Pulsa A para reintentar' : 'Pulsa ENTER o ESPACIO para reintentar'), W / 2, oBaseY, 20, '#00f5ff');
+        text('Monedas ganadas: +' + runCoins, W / 2, oBaseY + 28, 15, '#ffd54a');
+        text('Diamantes ganados: +' + runGems, W / 2, oBaseY + 48, 15, '#7ff0ff');
+        overBtns = [{ x: W / 2 - 130, y: oBaseY + 62, w: 120, h: 38, menu: true }, { x: W / 2 + 10, y: oBaseY + 62, w: 120, h: 38, shop: true }];
+        overBtns.forEach(function (o) {
+          ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(o.x, o.y, o.w, o.h);
+          ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(o.x, o.y, o.w, o.h);
+          text(o.menu ? 'MENÚ (Q)' : 'TIENDA (T)', o.x + o.w / 2, o.y + 25, 14, '#ffffff');
+        });
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    if (padMsgT > clock) text(padMsg, W / 2, 104, 14, '#7dffa0');
+    // Toast de misiones
+    if (msnToastT > clock && msnPendingToast) {
+      var ta = Math.min(1, (msnToastT - clock) * 2, (msnToastT - clock + 0.5) * 2);
+      ctx.globalAlpha = Math.min(1, ta);
+      var tw2 = Math.min(W - 20, 320), tx2 = W/2 - tw2/2, ty2 = H - 108;
+      ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(tx2, ty2, tw2, 30);
+      ctx.strokeStyle = msnPendingToast.col; ctx.lineWidth = 1.5; ctx.strokeRect(tx2, ty2, tw2, 30);
+      text(msnPendingToast.text, W/2, ty2 + 20, 13, msnPendingToast.col);
+      ctx.globalAlpha = 1;
+      if (msnToastT <= clock) msnPendingToast = null;
+    }
+    // HUD visual de misiones en pantalla de juego y banner de celebración
+    if (state === 'playing') {
+      drawInGameMissions();
+      drawMsnCelebration();
+    }
+    text(muted ? '🔇' : '🔊', 16, 36, 22, '#ffffff', 'left');
+    if (state === 'playing' || state === 'paused') text('⏸', 62, 36, 22, '#ffffff', 'left');
+    ctx.restore();
+
+    if (ox > 0) {
+      glow('#00f5ff', 12); ctx.fillStyle = '#00f5ff';
+      ctx.fillRect(ox - 2, 0, 2, H); ctx.fillRect(ox + W, 0, 2, H);
+      noGlow();
+    }
+  }
+
+  // ---------- Entrada ----------
+  function action() {
+    if (state === 'menu') { if (gameMode === 'camp') openMap(); else start(); }
+    else if (state === 'over' && performance.now() - overAt > 900) start(gameMode === 'camp' && camp ? camp.lv : 1);
+    else if (state === 'paused') state = 'playing';
+  }
+
+  function openHelp() { state = 'help'; helpTab = 0; clearKeys(); }
+  function closeHelp() { state = 'menu'; clearKeys(); }
+  function openMap() { mapSel = Math.min(prog, MAXLV); state = 'map'; clearKeys(); }
+  function exitToMenu() { saveMeta(); reset(); state = 'menu'; clearKeys(); }
+  // ---------- Códigos ----------
+  var codeIn = document.createElement('input');
+  codeIn.type = 'text'; codeIn.maxLength = 24; codeIn.autocomplete = 'off'; codeIn.autocapitalize = 'characters'; codeIn.spellcheck = false; codeIn.placeholder = 'ESCRIBE TU CÓDIGO';
+  codeIn.style.cssText = 'position:fixed;display:none;width:260px;height:44px;box-sizing:border-box;font:bold 20px "Segoe UI",Arial,sans-serif;text-align:center;letter-spacing:2px;color:#fff;background:rgba(0,20,40,.92);border:2px solid #00f5ff;border-radius:6px;outline:none;text-transform:uppercase;-webkit-user-select:text;user-select:text;touch-action:auto;z-index:5;';
+  document.body.appendChild(codeIn);
+  function openCode() { state = 'code'; codeMsg = ''; codeIn.value = ''; codeIn.style.display = 'block'; clearKeys(); setTimeout(function () { codeIn.focus(); }, 30); }
+  function closeCode() { codeIn.style.display = 'none'; codeIn.blur(); state = 'menu'; clearKeys(); }
+  function codeNote(m) { codeMsg = m; codeMsgT = clock + 4; }
+  function redeem() {
+    var c = codeIn.value.toUpperCase().replace(/[^A-Z0-9ÑÁÉÍÓÚ]/g, ''), i;
+    codeIn.value = '';
+    var before = { wallet: wallet, gems: gems, own: own.slice(), up: JSON.parse(JSON.stringify(up)), prog: prog };
+    if (c === 'PROBARTODO') {
+      own = SHIPS.map(function (x, i) { return i; }); wallet = Math.max(wallet, 999999); gems = Math.max(gems, 9999);
+      UPG.forEach(function (U) { up[U.k] = U.max; }); prog = MAXLV; cheat.wpn = true;
+      codeNote('¡MODO PRUEBA! Todo desbloqueado');
+    } else if (c === 'MONEDAS') { wallet += 10000; codeNote('+10000 monedas'); }
+    else if (c === 'DIAMANTES') { gems += 500; codeNote('+500 diamantes'); }
+    else if (c === 'NAVES') { own = SHIPS.map(function (x, i) { return i; }); codeNote('Todas las naves desbloqueadas'); }
+    else if (c === 'NIVELES') { prog = MAXLV; codeNote('Los 50 niveles desbloqueados'); }
+    else if (c === 'MEJORAS') { UPG.forEach(function (U) { up[U.k] = U.max; }); codeNote('Mejoras al máximo'); }
+    else if (c === 'ARMA6') { cheat.wpn = !cheat.wpn; codeNote('Arma nivel 6 al empezar: ' + (cheat.wpn ? 'SÍ' : 'NO')); }
+    else if (c === 'INMORTAL') { cheat.god = !cheat.god; codeNote('Invencible: ' + (cheat.god ? 'SÍ' : 'NO')); }
+    else if (c === 'BORRAR') { wallet = 0; gems = 0; own = [0, 1]; sel = [0, 1]; prog = 1; for (i in up) up[i] = 0; cheat.god = false; cheat.wpn = false; codeLog = newCodeLog(); codeNote('Progreso borrado'); }
+    else { codeNote('Código no válido'); tone(150, 0.12, 'square', 0.05, 0); return; }
+    if (c !== 'BORRAR') logCodes(before);
+    saveMeta(); powerSound();
+  }
+  function drawCode() {
+    var by = H * 0.36 + 62, i, R;
+    ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
+    glow('#00f5ff', 18); text('CÓDIGOS', W / 2, H * 0.2, Math.min(40, W / 9), '#ffffff'); noGlow();
+    text('Escribe un código y pulsa CANJEAR', W / 2, H * 0.2 + 30, 14, '#b0b0d0');
+    codeIn.style.left = (ox + W / 2 - 130) + 'px'; codeIn.style.top = (H * 0.36) + 'px';
+    codeRects = [{ x: W / 2 - 130, y: by, w: 260, h: 42, ok: true }, { x: W / 2 - 80, y: by + 54, w: 160, h: 36, back: true }];
+    for (i = 0; i < 2; i++) {
+      R = codeRects[i]; ctx.fillStyle = i ? 'rgba(255,255,255,0.06)' : 'rgba(0,245,255,0.16)'; ctx.fillRect(R.x, R.y, R.w, R.h);
+      ctx.strokeStyle = i ? 'rgba(255,255,255,0.4)' : '#00f5ff'; ctx.lineWidth = 2; ctx.strokeRect(R.x, R.y, R.w, R.h);
+      text(i ? 'VOLVER (ESC)' : 'CANJEAR (ENTER)', W / 2, R.y + R.h / 2 + 6, i ? 15 : 17, '#ffffff');
+    }
+    if (codeMsgT > clock) text(codeMsg, W / 2, by + 118, 16, codeMsg.indexOf('no válido') >= 0 ? '#ff6b8a' : '#7dffa0');
+    text('Invencible: ' + (cheat.god ? 'SÍ' : 'NO') + '   ·   Arma nivel 6: ' + (cheat.wpn ? 'SÍ' : 'NO'), W / 2, by + 150, 13, '#8a8aa8');
+    text('◉ ' + wallet + '   ◆ ' + gems + '   · Nivel máx. ' + prog, W / 2, by + 172, 13, '#8a8aa8');
+    text('Lo obtenido con códigos se quita al abrir el juego de nuevo', W / 2, by + 194, 12, '#6a6a88');
+  }
+  function shopNote(m) { shopMsg = m; shopMsgT = clock + 1.6; }
+  function openShop() { shopPrev = state; state = 'shop'; shopSel = 0; clearKeys(); }
+  function closeShop() { state = shopPrev; clearKeys(); }
+  function buy(i, slot) {
+    if (tab === 1) {
+      i = shipOrder[i];
+      var S = SHIPS[i];
+      if (own.indexOf(i) < 0) {
+        if (S.gem) {
+          if (gems < S.gem) { shopNote('Te faltan ' + (S.gem - gems) + ' diamantes'); tone(150, 0.12, 'square', 0.05, 0); return; }
+          gems -= S.gem;
+        } else {
+          if (wallet < S.cost) { shopNote('Te faltan ' + (S.cost - wallet) + ' monedas'); tone(150, 0.12, 'square', 0.05, 0); return; }
+          wallet -= S.cost;
+        }
+        own.push(i); powerSound();
+      }
+      sel[slot || 0] = i; saveMeta(); shopNote('¡' + S.n + ' equipada!');
+      return;
+    }
+    var U = UPG[i], lv = up[U.k];
+    if (lv >= U.max) { shopNote('Ya está al máximo'); return; }
+    var cost = U.base * (lv + 1);
+    if (wallet < cost) { shopNote('Te faltan ' + (cost - wallet) + ' monedas'); tone(150, 0.12, 'square', 0.05, 0); return; }
+    wallet -= cost; up[U.k]++; saveMeta(); powerSound(); shopNote('¡Comprado!');
+  }
+
+  function setGameMode(m) {
+    if (gameMode === m) return;
+    gameMode = m;
+    numPlayers = (m === 'coop' ? 2 : 1);
+    try { localStorage.setItem('nd_mode', m); } catch (e) {}
+    try { localStorage.setItem('nd_players', String(numPlayers)); } catch (e) {}
+    clearKeys(); loadBest(); resize(); reset();
+    tone(520, 0.05, 'triangle', 0.05, 0);
+  }
+  function setMode(n) {
+    setGameMode(n === 2 ? 'coop' : 'camp');
+  }
+
+  // J1: W A S D + ESPACIO.  J2: flechas + ENTER (en modo 1 jugador las flechas mueven a J1)
+  function keyTarget(k) {
+    var two = numPlayers === 2 ? 1 : 0;
+    switch (k) {
+      case 'a': case 'A': return [0, 'left'];
+      case 'd': case 'D': return [0, 'right'];
+      case 'w': case 'W': return [0, 'up'];
+      case 's': case 'S': return [0, 'down'];
+      case ' ': return [0, 'fire'];
+      case 'ArrowLeft': return [two, 'left'];
+      case 'ArrowRight': return [two, 'right'];
+      case 'ArrowUp': return [two, 'up'];
+      case 'ArrowDown': return [two, 'down'];
+      case 'Enter': return two ? [1, 'fire'] : null;
+    }
+    return null;
+  }
+
+  window.addEventListener('keydown', function (e) {
+    var k = e.key;
+    if (perkModal) {
+      if (k === '1') { choosePerk(0); e.preventDefault(); return; }
+      if (k === '2') { choosePerk(1); e.preventDefault(); return; }
+      if (k === '3') { choosePerk(2); e.preventDefault(); return; }
+      if (k === 'ArrowLeft' || k === 'a' || k === 'A') {
+        perkSel = (perkSel + perkCards.length - 1) % perkCards.length;
+        tone(400, 0.04, 'triangle', 0.04, 0);
+        e.preventDefault(); return;
+      }
+      if (k === 'ArrowRight' || k === 'd' || k === 'D') {
+        perkSel = (perkSel + 1) % perkCards.length;
+        tone(480, 0.04, 'triangle', 0.04, 0);
+        e.preventDefault(); return;
+      }
+      if (k === 'Enter' || k === ' ') {
+        choosePerk(perkSel);
+        e.preventDefault(); return;
+      }
+      e.preventDefault(); return;
+    }
+    touchMode = false; tch = null;
+    if (state === 'settings') {
+      if (k === 'Escape' || k === 'Backspace') { closeSettings(); e.preventDefault(); return; }
+      if (k === 'ArrowLeft' || k === 'a' || k === 'A') {
+        settings.sfxVol = Math.max(0, settings.sfxVol - 0.25);
+        saveSettings(); powerSound();
+      } else if (k === 'ArrowRight' || k === 'd' || k === 'D') {
+        settings.sfxVol = Math.min(1, settings.sfxVol + 0.25);
+        saveSettings(); powerSound();
+      }
+      e.preventDefault(); return;
+    }
+    if (state === 'code') { if (k === 'Enter') redeem(); else if (k === 'Escape') closeCode(); return; }
+    if (state === 'shop') {
+      var nn = tab === 0 ? UPG.length : SHIPS.length;
+      if (k === 'ArrowUp' || k === 'w' || k === 'W') shopSel = (shopSel + nn - 1) % nn;
+      else if (k === 'ArrowDown' || k === 's' || k === 'S') shopSel = (shopSel + 1) % nn;
+      else if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'a' || k === 'A' || k === 'd' || k === 'D') { tab = 1 - tab; shopSel = 0; }
+      else if ((k === 'Enter' || k === ' ') && !e.repeat) buy(shopSel, 0);
+      else if ((k === '1' || k === '2') && tab === 1) buy(shopSel, +k - 1);
+      else if (k === 'Escape' || k === 't' || k === 'T') closeShop();
+      e.preventDefault(); return;
+    }
+    if (state === 'help') {
+      if (k === 'ArrowLeft' || k === 'a' || k === 'A') helpTab = (helpTab + helpTabs.length - 1) % helpTabs.length;
+      else if (k === 'ArrowRight' || k === 'd' || k === 'D') helpTab = (helpTab + 1) % helpTabs.length;
+      else if (k === 'Escape' || k === 'Enter' || k === ' ' || k === 'h' || k === 'H' || k === '?') closeHelp();
+      e.preventDefault(); return;
+    }
+    if (state === 'map') {
+      if (k === 'ArrowLeft' || k === 'ArrowDown' || k === 'a' || k === 'A' || k === 's' || k === 'S') {
+        mapSel = Math.max(1, mapSel - 1);
+        tone(350, 0.04, 'triangle', 0.03, 0);
+      }
+      else if (k === 'ArrowRight' || k === 'ArrowUp' || k === 'd' || k === 'D' || k === 'w' || k === 'W') {
+        mapSel = Math.min(MAXLV, mapSel + 1);
+        tone(450, 0.04, 'triangle', 0.03, 0);
+      }
+      else if (k >= '1' && k <= '5') {
+        var sNum = parseInt(k, 10);
+        mapSel = Math.min(prog, SECTORS[sNum - 1].lvMin);
+        mapCam = mapSel;
+        tone(520, 0.05, 'triangle', 0.04, 0);
+      }
+      else if ((k === 'Enter' || k === ' ') && !e.repeat) {
+        if (mapSel <= prog) {
+          start(mapSel);
+        } else {
+          mapNote = '🔒 Nivel ' + mapSel + ' bloqueado. Supera el nivel ' + prog + ' para avanzar.';
+          mapNoteT = clock + 3.5;
+          tone(180, 0.1, 'sawtooth', 0.04, 0);
+          tone(140, 0.15, 'sawtooth', 0.04, 0.06);
+        }
+      }
+      else if (k === 'Escape') {
+        if (msnPanelOpen) { msnPanelOpen = false; e.preventDefault(); return; }
+        state = 'menu';
+      }
+      else if (k === 'j' || k === 'J' || k === 'Tab') {
+        msnPanelOpen = !msnPanelOpen;
+        e.preventDefault(); return;
+      }
+      else if (k === 't' || k === 'T') openShop();
+      e.preventDefault(); return;
+    }
+    if (state === 'paused') {
+      if (k === 'q' || k === 'Q') { exitToMenu(); return; }
+      if (k === 'r' || k === 'R') { start(level); state = 'playing'; return; }
+      if (k === 'o' || k === 'O') { openSettings('paused'); return; }
+      if (k === 'p' || k === 'P' || k === 'Escape') { state = 'playing'; return; }
+    }
+    if (state === 'over' && (k === 'q' || k === 'Q' || k === 'Escape')) { exitToMenu(); return; }
+    if ((state === 'menu' || (state === 'over' && performance.now() - overAt > 900)) && (k === 't' || k === 'T')) { openShop(); return; }
+    if (state === 'menu') {
+      if (k === '1') { setGameMode('camp'); return; }
+      if (k === '2') { setGameMode('endless'); return; }
+      if (k === '3') { setGameMode('bossrush'); return; }
+      if (k === '4') { setGameMode('daily'); return; }
+      if (k === '5') { setGameMode('coop'); return; }
+      if (k === 'h' || k === 'H' || k === '?') { openHelp(); return; }
+      if (k === 'o' || k === 'O') { openSettings('menu'); return; }
+      if (k === 'ArrowLeft' || k === 'a' || k === 'A') {
+        var mList = ['camp', 'endless', 'bossrush', 'daily', 'coop'];
+        var mi = mList.indexOf(gameMode);
+        setGameMode(mList[(mi + mList.length - 1) % mList.length]);
+        e.preventDefault(); return;
+      }
+      if (k === 'ArrowRight' || k === 'd' || k === 'D') {
+        var mList = ['camp', 'endless', 'bossrush', 'daily', 'coop'];
+        var mi = mList.indexOf(gameMode);
+        setGameMode(mList[(mi + 1) % mList.length]);
+        e.preventDefault(); return;
+      }
+    }
+    // Habilidad de la nave: J1 = E o Shift izquierdo; J2 = Shift derecho o 0 del teclado numérico (en 1 jugador, cualquier Shift)
+    if (state === 'playing' && !e.repeat) {
+      var abP = -1;
+      if (k === 'e' || k === 'E' || e.code === 'ShiftLeft') abP = 0;
+      else if (e.code === 'ShiftRight' || e.code === 'Numpad0') abP = numPlayers === 2 ? 1 : 0;
+      if (abP >= 0) { keyState[abP].ab = true; e.preventDefault(); return; }
+    }
+    var t = keyTarget(k);
+    if (t) {
+      keyState[t[0]][t[1]] = true;
+      if (t[0] === 0 && t[1] !== 'fire' && numPlayers === 1) mouseT = null;
+      e.preventDefault();
+    }
+    if (k === ' ') { if (!e.repeat && state !== 'playing') action(); }
+    else if (k === 'Enter') { if (!e.repeat) action(); e.preventDefault(); }
+    else if (k === 'p' || k === 'P' || k === 'Escape') { if (!e.repeat) togglePause(); }
+    else if (k === 'm' || k === 'M') { toggleMute(); }
+    else if (k === 'f' || k === 'F') {
+      try {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen();
+      } catch (err) {}
+    }
+  });
+  window.addEventListener('keyup', function (e) {
+    var t = keyTarget(e.key);
+    if (t) keyState[t[0]][t[1]] = false;
+  });
+  window.addEventListener('pagehide', saveMeta);
+  window.addEventListener('beforeunload', saveMeta);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) saveMeta(); });
+  window.addEventListener('blur', function () {
+    saveMeta();
+    clearKeys();
+    if (state === 'playing') state = 'paused';
+  });
+
+  // Clic o toque sobre la interfaz. Devuelve false si el toque es "de juego" (estado playing)
+  function pointer(cx, cy, isCanvas) {
+    var x = isCanvas ? cx : (cx - ox), y = cy, i, o;
+    if (perkModal) {
+      for (i = 0; i < perkCardRects.length; i++) {
+        var pcr = perkCardRects[i];
+        if (x >= pcr.x && x <= pcr.x + pcr.w && y >= pcr.y && y <= pcr.y + pcr.h) {
+          choosePerk(pcr.idx);
+          return true;
+        }
+      }
+      return true;
+    }
+    if (x >= 0 && x < 60 && y < 60) { toggleMute(); return true; }
+    if (state === 'settings') {
+      return handleSettingsClick(x, y);
+    }
+    if (state === 'code') {
+      for (i = 0; i < codeRects.length; i++) { o = codeRects[i]; if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) { if (o.back) closeCode(); else redeem(); } }
+      return true;
+    }
+    if (state === 'help') {
+      for (i = 0; i < helpRects.length; i++) {
+        o = helpRects[i];
+        if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) { if (o.back) closeHelp(); else helpTab = o.tab; return true; }
+      }
+      return true;
+    }
+    if (state === 'map') {
+      if (x > W - 130 && y < 56) { state = 'menu'; return true; }
+      // Si el panel de misiones está abierto, captura clics sobre sus elementos o fondo
+      if (msnPanelOpen) {
+        for (i = msnPanelRects.length - 1; i >= 0; i--) {
+          o = msnPanelRects[i];
+          if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) {
+            if (o.close) { msnPanelOpen = false; return true; }
+            if (o.tab !== undefined) { msnShowAchiev = o.tab; return true; }
+            if (o.claim !== undefined) { claimMission(o.claim); return true; }
+            if (o.claimAch !== undefined) { claimAchiev(o.claimAch); return true; }
+            return true; // Click absorbido dentro del panel
+          }
+        }
+      }
+      // Botón flotante para abrir panel de misiones
+      if (msnToggleBtn && x >= msnToggleBtn.x && x <= msnToggleBtn.x + msnToggleBtn.w && y >= msnToggleBtn.y && y <= msnToggleBtn.y + msnToggleBtn.h) {
+        msnPanelOpen = !msnPanelOpen;
+        return true;
+      }
+      if (mapPlayBtn && x >= mapPlayBtn.x && x <= mapPlayBtn.x + mapPlayBtn.w && y >= mapPlayBtn.y && y <= mapPlayBtn.y + mapPlayBtn.h) {
+        if (mapSel <= prog) {
+          start(mapSel);
+        } else {
+          mapNote = '🔒 Nivel ' + mapSel + ' bloqueado. Supera el nivel ' + prog + ' para avanzar.';
+          mapNoteT = clock + 3.5;
+          tone(180, 0.1, 'sawtooth', 0.04, 0);
+          tone(140, 0.15, 'sawtooth', 0.04, 0.06);
+        }
+        return true;
+      }
+      if (mapShopBtn && x >= mapShopBtn.x && x <= mapShopBtn.x + mapShopBtn.w && y >= mapShopBtn.y && y <= mapShopBtn.y + mapShopBtn.h) {
+        openShop(); return true;
+      }
+      if (x > W / 2 - 100 && x < W / 2 + 100 && y > H - 74 && y < H - 42) { openShop(); return true; }
+      for (i = 0; i < mapRects.length; i++) {
+        o = mapRects[i];
+        if (o.secJump) {
+          if (x >= o.x - o.w / 2 && x <= o.x + o.w / 2 && y >= o.y - o.h / 2 && y <= o.y + o.h / 2) {
+            mapSel = Math.min(prog, o.secJump);
+            mapCam = mapSel;
+            powerSound();
+            return true;
+          }
+        } else if (o.r && (x - o.x) * (x - o.x) + (y - o.y) * (y - o.y) < o.r * o.r) {
+          mapSel = o.lv;
+          if (o.lv <= prog) {
+            start(o.lv);
+          } else {
+            mapNote = '🔒 Nivel ' + o.lv + ' bloqueado. Supera el nivel ' + prog + ' para avanzar.';
+            mapNoteT = clock + 3.5;
+            tone(180, 0.1, 'sawtooth', 0.04, 0);
+            tone(140, 0.15, 'sawtooth', 0.04, 0.06);
+          }
+          return true;
+        }
+      }
+      return true;
+    }
+    if (state === 'paused') {
+      for (i = 0; i < pauseBtns.length; i++) {
+        o = pauseBtns[i];
+        if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) {
+          if (o.act === 'exit') exitToMenu();
+          else if (o.act === 'restart') { start(level); state = 'playing'; }
+          else if (o.act === 'settings') { openSettings('paused'); }
+          else { state = 'playing'; }
+          return true;
+        }
+      }
+      return true;
+    }
+    if (state === 'playing') {
+      if (x >= 56 && x < 120 && y < 64) { togglePause(); return true; }
+      if (hudMsnRect && x >= hudMsnRect.x && x <= hudMsnRect.x + hudMsnRect.w && y >= hudMsnRect.y && y <= hudMsnRect.y + hudMsnRect.h) {
+        hudMsnMini = !hudMsnMini;
+        return true;
+      }
+      if (touchMode && abBtn && (x - abBtn.x) * (x - abBtn.x) + (y - abBtn.y) * (y - abBtn.y) < abBtn.r * abBtn.r) { keyState[0].ab = true; return true; }
+      return false;
+    }
+    if (state === 'shop') {
+      for (i = 0; i < shopRects.length; i++) {
+        o = shopRects[i];
+        if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) { if (o.back) closeShop(); else if (o.tab !== undefined) { tab = o.tab; shopSel = 0; } else { shopSel = o.i; buy(o.i, 0); } return true; }
+      }
+      return true;
+    }
+    if (state === 'menu') {
+      for (i = 0; i < menuBtns.length; i++) {
+        o = menuBtns[i];
+        if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) {
+          if (o.shop) openShop();
+          else if (o.code) openCode();
+          else if (o.help) openHelp();
+          else if (o.settings) openSettings('menu');
+          else if (o.play) action();
+          else if (o.mode) setGameMode(o.mode);
+          else setMode(o.n);
+          return true;
+        }
+      }
+      return true;
+    }
+    if (state === 'over') {
+      if (performance.now() - overAt > 900) {
+        for (i = 0; i < overBtns.length; i++) {
+          o = overBtns[i];
+          if (x >= o.x && x <= o.x + o.w && y >= o.y && y <= o.y + o.h) { if (o.menu) exitToMenu(); else openShop(); return true; }
+        }
+      }
+    }
+    action();
+    return true;
+  }
+
+  canvas.addEventListener('wheel', function (e) {
+    if (state === 'shop') { shopTop = Math.max(0, Math.min(shopMax, shopTop + (e.deltaY > 0 ? 1 : -1))); e.preventDefault(); }
+    else if (state === 'map') {
+      mapSel = Math.max(1, Math.min(MAXLV, mapSel + (e.deltaY < 0 ? 1 : -1)));
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', function (e) {
+    if (e.button === 2 && state === 'playing' && numPlayers === 1) { keyState[0].ab = true; e.preventDefault(); return; }
+    if (e.button !== 0) return;
+    if (performance.now() - lastTouch < 800) return; // evento emulado tras un toque
+    touchMode = false;
+    if (!pointer(e.clientX, e.clientY) && numPlayers === 1) mouseFire = true;
+  });
+
+  // Táctil: arrastrar mueve la nave (movimiento relativo) y dispara sola en 1 jugador
+  canvas.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    lastTouch = performance.now(); touchMode = true;
+    var t = e.changedTouches[0], P = players[0];
+    if (state === 'shop' && t.clientY > H * 0.08 + 70 && t.clientY < H - 70) {
+      shopTouch = { id: t.identifier, x: t.clientX, y: t.clientY, top: shopTop, moved: false };
+      return;
+    }
+    if (state === 'map' && t.clientY > 120 && t.clientY < H - 120) {
+      mapTouch = { id: t.identifier, x: t.clientX, y: t.clientY, sel: mapSel, moved: false };
+      return;
+    }
+    if (pointer(t.clientX, t.clientY)) return;
+    if (state === 'playing' && numPlayers === 1 && P && P.alive && !tch) tch = { id: t.identifier, fx: t.clientX, fy: t.clientY, px: P.x, py: P.y };
+  }, { passive: false });
+  canvas.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    lastTouch = performance.now();
+    var P = players[0];
+    if (shopTouch) {
+      for (var si = 0; si < e.changedTouches.length; si++) {
+        var sc = e.changedTouches[si];
+        if (sc.identifier === shopTouch.id) {
+          var dy = sc.clientY - shopTouch.y;
+          if (Math.abs(dy) > 10) shopTouch.moved = true;
+          if (shopTouch.moved) shopTop = Math.max(0, Math.min(shopMax, shopTouch.top - Math.round(dy / shopRH)));
+        }
+      }
+      return;
+    }
+    if (mapTouch) {
+      for (var mi = 0; mi < e.changedTouches.length; mi++) {
+        var mc = e.changedTouches[mi];
+        if (mc.identifier === mapTouch.id) {
+          var mdy = mc.clientY - mapTouch.y;
+          if (Math.abs(mdy) > 8) mapTouch.moved = true;
+          if (mapTouch.moved) mapSel = Math.max(1, Math.min(MAXLV, Math.round(mapTouch.sel + mdy / 70)));
+        }
+      }
+      return;
+    }
+    if (!tch || state !== 'playing' || !P || !P.alive) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var c = e.changedTouches[i];
+      if (c.identifier === tch.id) {
+        mouseT = {
+          x: Math.max(P.r, Math.min(W - P.r, tch.px + (c.clientX - tch.fx) * 1.15)),
+          y: Math.max(P.r + 20, Math.min(H - 35, tch.py + (c.clientY - tch.fy) * 1.15))
+        };
+      }
+    }
+  }, { passive: false });
+  function touchEnd(e) {
+    e.preventDefault(); lastTouch = performance.now();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var c = e.changedTouches[i];
+      if (tch && c.identifier === tch.id) tch = null;
+      if (shopTouch && c.identifier === shopTouch.id) {
+        if (!shopTouch.moved && e.type === 'touchend') pointer(shopTouch.x, shopTouch.y);
+        shopTouch = null;
+      }
+      if (mapTouch && c.identifier === mapTouch.id) {
+        if (!mapTouch.moved && e.type === 'touchend') pointer(mapTouch.x, mapTouch.y);
+        mapTouch = null;
+      }
+    }
+  }
+  canvas.addEventListener('touchend', touchEnd, { passive: false });
+  canvas.addEventListener('touchcancel', touchEnd, { passive: false });
+  window.addEventListener('mouseup', function () { mouseFire = false; });
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  canvas.addEventListener('mousemove', function (e) {
+    mousePos = { x: e.clientX - ox, y: e.clientY };
+    var K = keyState[0], P = players[0];
+    if (state === 'playing' && numPlayers === 1 && performance.now() - lastTouch > 800 && P && P.alive && !K.left && !K.right && !K.up && !K.down) {
+      mouseT = {
+        x: Math.max(P.r, Math.min(W - P.r, e.clientX - ox)),
+        y: Math.max(P.r + 20, Math.min(H - 35, e.clientY))
+      };
+    }
+  });
+
+  // ---------- Mando / gamepad ----------
+  var padBlocked = false;
+  function padBtn(bt, k) { return !!(bt[k] && (bt[k].pressed || bt[k].value > 0.5)); }
+  function dz(v) { var a = Math.abs(v); return a < 0.22 ? 0 : (v < 0 ? -1 : 1) * Math.min(1, (a - 0.22) / 0.78); }
+  function padUI(ev) {
+    var nn;
+    if (!(ev.a || ev.b || ev.x || ev.y || ev.start || ev.l || ev.r || ev.u || ev.d)) return;
+    if (state === 'menu') {
+      if (ev.l) {
+        var mList = ['camp', 'endless', 'bossrush', 'daily', 'coop'];
+        var mi = mList.indexOf(gameMode);
+        setGameMode(mList[(mi + mList.length - 1) % mList.length]);
+      } else if (ev.r) {
+        var mList = ['camp', 'endless', 'bossrush', 'daily', 'coop'];
+        var mi = mList.indexOf(gameMode);
+        setGameMode(mList[(mi + 1) % mList.length]);
+      }
+      else if (ev.a || ev.start) action();
+      else if (ev.y) openHelp(); else if (ev.x) openShop();
+    } else if (state === 'playing') {
+      if (ev.start) togglePause();
+    } else if (state === 'paused') {
+      if (ev.a || ev.start) state = 'playing'; else if (ev.b) exitToMenu();
+    } else if (state === 'map') {
+      if (ev.l || ev.d) { mapSel = Math.max(1, mapSel - 1); tone(350, 0.04, 'triangle', 0.03, 0); }
+      else if (ev.r || ev.u) { mapSel = Math.min(MAXLV, mapSel + 1); tone(450, 0.04, 'triangle', 0.03, 0); }
+      else if (ev.a || ev.start) {
+        if (mapSel <= prog) start(mapSel);
+        else {
+          mapNote = '🔒 Nivel ' + mapSel + ' bloqueado. Supera el nivel ' + prog + ' para avanzar.';
+          mapNoteT = clock + 3.5;
+          tone(180, 0.1, 'sawtooth', 0.04, 0);
+          tone(140, 0.15, 'sawtooth', 0.04, 0.06);
+        }
+      }
+      else if (ev.b) state = 'menu';
+      else if (ev.x || ev.y) openShop();
+    } else if (state === 'shop') {
+      nn = tab === 0 ? UPG.length : SHIPS.length;
+      if (ev.u) shopSel = (shopSel + nn - 1) % nn;
+      else if (ev.d) shopSel = (shopSel + 1) % nn;
+      else if (ev.l || ev.r) { tab = 1 - tab; shopSel = 0; }
+      else if (ev.a) buy(shopSel, 0);
+      else if (ev.x && tab === 1) buy(shopSel, 1);
+      else if (ev.b || ev.start) closeShop();
+    } else if (perkModal) {
+      if (ev.l) { perkSel = (perkSel + perkCards.length - 1) % perkCards.length; tone(400, 0.04, 'triangle', 0.04, 0); }
+      else if (ev.r) { perkSel = (perkSel + 1) % perkCards.length; tone(480, 0.04, 'triangle', 0.04, 0); }
+      else if (ev.a || ev.start) { choosePerk(perkSel); }
+      else if (ev.x) { choosePerk(0); }
+      else if (ev.y && perkCards.length > 1) { choosePerk(1); }
+      else if (ev.b && perkCards.length > 2) { choosePerk(2); }
+    } else if (state === 'help') {
+      if (ev.l) helpTab = (helpTab + helpTabs.length - 1) % helpTabs.length; else if (ev.r) helpTab = (helpTab + 1) % helpTabs.length;
+      else if (ev.a || ev.b || ev.start) closeHelp();
+    } else if (state === 'over') {
+      if (performance.now() - overAt > 900) {
+        if (ev.a || ev.start) action(); else if (ev.b) exitToMenu(); else if (ev.x || ev.y) openShop();
+      }
+    }
+  }
+  function pollPads() {
+    var gps = [], list = [], i, n, g, bt, ax, lx, ly, fire, cur, prev, ev, kk, slot;
+    if (padBlocked) return;
+    try { gps = (navigator.getGamepads ? navigator.getGamepads() : null) || []; }
+    catch (err) { padBlocked = true; padOn = false; return; } // el navegador/iframe bloquea el acceso a mandos
+    padState[0].x = padState[0].y = padState[1].x = padState[1].y = 0;
+    padState[0].fire = padState[1].fire = false;
+    for (i = 0; i < gps.length; i++) if (gps[i] && gps[i].connected) list.push(gps[i]);
+    padOn = list.length > 0;
+    for (n = 0; n < list.length; n++) {
+      g = list[n]; bt = g.buttons || []; ax = g.axes || [];
+      lx = dz(ax[0] || 0); ly = dz(ax[1] || 0);
+      if (padBtn(bt, 14)) lx = -1; else if (padBtn(bt, 15)) lx = 1;
+      if (padBtn(bt, 12)) ly = -1; else if (padBtn(bt, 13)) ly = 1;
+      fire = padBtn(bt, 0) || padBtn(bt, 2) || padBtn(bt, 4) || padBtn(bt, 5) || padBtn(bt, 6) || padBtn(bt, 7);
+      cur = { a: padBtn(bt, 0), b: padBtn(bt, 1), x: padBtn(bt, 2), y: padBtn(bt, 3), start: padBtn(bt, 9), l: lx < -0.6, r: lx > 0.6, u: ly < -0.6, d: ly > 0.6 };
+      prev = padPrev[g.index] || {};
+      padPrev[g.index] = cur;
+      // B o Y activan la habilidad de la nave durante la partida
+      if (state === 'playing' && (numPlayers === 2 || n === 0) && ((cur.b && !prev.b) || (cur.y && !prev.y))) keyState[numPlayers === 2 ? Math.min(n, 1) : 0].ab = true;
+      if (n === 0) {
+        ev = {};
+        for (kk in cur) ev[kk] = cur[kk] && !prev[kk];
+        padUI(ev);
+      }
+      if (numPlayers === 1 && n > 0) continue;
+      slot = numPlayers === 2 ? Math.min(n, 1) : 0;
+      padState[slot].x = lx; padState[slot].y = ly; padState[slot].fire = padState[slot].fire || fire;
+    }
+  }
+  window.addEventListener('gamepadconnected', function () { padMsg = '🎮 Control conectado'; padMsgT = clock + 3; });
+  window.addEventListener('gamepaddisconnected', function () {
+    padMsg = '🎮 Control desconectado'; padMsgT = clock + 3;
+    if (state === 'playing') state = 'paused';
+  });
+
+  // Gancho para pruebas automáticas (no hace nada en el juego real)
+  var _testHook = typeof __ND_TEST !== 'undefined' ? __ND_TEST : (typeof window !== 'undefined' && window.__ND_TEST ? window.__ND_TEST : (typeof globalThis !== 'undefined' && globalThis.__ND_TEST ? globalThis.__ND_TEST : null));
+  if (_testHook) {
+    _testHook.get = function () {
+      var p0 = players[0] || {};
+      return { state: state, level: level, lives: p0.lives, score: totalScore(), weapon: p0.weapon, player: p0, players: players, enemies: enemies, asteroids: asteroids, eBullets: eBullets.length, W: W, H: H, ox: ox, clearing: clearing, camp: camp, gameMode: gameMode, endlessWave: endlessWave, bossRushIdx: bossRushIdx, dailyWave: dailyWave, best: best };
+    };
+    _testHook.start = start;
+    _testHook.startLevel = startLevel;
+    _testHook.nextStage = nextStage;
+    _testHook.killEnemy = killEnemy;
+    _testHook.destroyAsteroid = destroyAsteroid;
+    _testHook.drawShip = drawShip;
+    _testHook.drawEnemy = drawEnemy;
+    _testHook.openMap = openMap;
+    _testHook.drawMap = drawMap;
+    _testHook.getMap = function () { return { state: state, mapSel: mapSel, prog: prog, mapNote: mapNote }; };
+    _testHook.useAbility = useAbility;
+    _testHook.update = update;
+    _testHook.hurtPlayer = hurtPlayer;
+    _testHook.draw = draw;
+    _testHook.musicUpdate = musicUpdate;
+    _testHook.fx = function () { return { floats: floats, slowmoT: slowmoT, music: music, slowF: slowF(), timeScale: timeScale(), eBullets: eBullets, pBullets: pBullets, ships: SHIPS, sel: sel, AB: AB, up: up, UPG: UPG, coins: coins, gemDrops: gemDrops, buy: buy }; };
+    _testHook.setEBullets = function (a) { eBullets = a; };
+    _testHook.gameMode = function () { return gameMode; };
+    _testHook.setGameMode = setGameMode;
+    _testHook.getModes = function () { return MODES; };
+    _testHook.getEndlessRanks = getEndlessRanks;
+    _testHook.saveEndlessRank = saveEndlessRank;
+    _testHook.getBossRushBest = getBossRushBest;
+    _testHook.saveBossRushBest = saveBossRushBest;
+    _testHook.getDailyBest = getDailyBest;
+    _testHook.saveDailyBest = saveDailyBest;
+    _testHook.getDailyDateStr = getDailyDateStr;
+    _testHook.rnd = rnd;
+    _testHook.seedRandom = seedRandom;
+    _testHook.hashSeed = hashSeed;
+    _testHook.startEndlessWave = startEndlessWave;
+    _testHook.startBossRushStage = startBossRushStage;
+    _testHook.startDailyWave = startDailyWave;
+    _testHook.gameOver = gameOver;
+    _testHook.getMissions = function () {
+      return {
+        missions: missions,
+        achiev: achiev,
+        msnPanelOpen: msnPanelOpen,
+        msnShowAchiev: msnShowAchiev,
+        hudMsnMini: hudMsnMini,
+        msnToggleBtn: msnToggleBtn,
+        hudMsnRect: hudMsnRect,
+        msnPanelRects: msnPanelRects,
+        msnBanner: msnBanner,
+        msnBannerT: msnBannerT,
+        MISSION_DEFS: MISSION_DEFS,
+        ACHIEV_DEFS: ACHIEV_DEFS,
+        wallet: wallet,
+        gems: gems
+      };
+    };
+    _testHook.toggleMsnPanel = function (open) { msnPanelOpen = (open !== undefined ? open : !msnPanelOpen); return msnPanelOpen; };
+    _testHook.toggleHudMsn = function (mini) { hudMsnMini = (mini !== undefined ? mini : !hudMsnMini); return hudMsnMini; };
+    _testHook.claimMission = claimMission;
+    _testHook.claimAchiev = claimAchiev;
+    _testHook.msnDoneCelebration = msnDoneCelebration;
+    _testHook.drawInGameMissions = drawInGameMissions;
+    _testHook.drawMapMissions = drawMapMissions;
+    _testHook.drawMsnCelebration = drawMsnCelebration;
+    _testHook.pointer = function (cx, cy, isCanvas) { return pointer(isCanvas ? cx + ox : cx, cy); };
+    _testHook.updateMission = updateMission;
+    _testHook.updateAchiev = updateAchiev;
+    _testHook.MAX_LIVES = MAX_LIVES;
+    _testHook.MAXLV = MAXLV;
+    _testHook.BOSSES = BOSSES;
+    _testHook.MINIBOSSES = MINIBOSSES;
+    _testHook.KIND = KIND;
+    _testHook.applyPower = applyPower;
+    _testHook.dropPower = dropPower;
+    _testHook.pickEnemyEntry = pickEnemyEntry;
+    _testHook.needsLife = needsLife;
+    _testHook.enemyFire = enemyFire;
+    _testHook.playerShoot = playerShoot;
+    _testHook.getPowerups = function () { return powerups; };
+    _testHook.setPowerups = function (p) { powerups = p; };
+    _testHook.getEnemies = function () { return enemies; };
+    _testHook.setEnemies = function (e) { enemies = e; };
+    _testHook.getCamp = function () { return camp; };
+    _testHook.getLevel = function () { return level; };
+    _testHook.togglePause = togglePause;
+    _testHook.setState = function (s) { state = s; };
+    Object.defineProperty(_testHook, 'settings', { get: function () { return settings; }, enumerable: true, configurable: true });
+    _testHook.loadSettings = loadSettings;
+    _testHook.saveSettings = saveSettings;
+    Object.defineProperty(_testHook, 'stars', { get: function () { return stars; }, enumerable: true, configurable: true });
+    _testHook.totalStars = totalStars;
+    _testHook.levelStars = levelStars;
+    _testHook.targetScoreForLevel = targetScoreForLevel;
+    Object.defineProperty(_testHook, 'killStats', { get: function () { return killStats; }, enumerable: true, configurable: true });
+    _testHook.recordKill = recordKill;
+    _testHook.SECTORS = SECTORS;
+    _testHook.sectorOf = sectorOf;
+    Object.defineProperty(_testHook, 'spaceMines', { get: function () { return spaceMines; }, enumerable: true, configurable: true });
+    _testHook.spawnSpaceMine = spawnSpaceMine;
+    _testHook.explodeSpaceMine = explodeSpaceMine;
+    _testHook.updateSpaceMines = updateSpaceMines;
+    _testHook.triggerCosmicEvent = triggerCosmicEvent;
+    _testHook.getCosmicEvent = function () { return cosmicEvent; };
+    _testHook.getMeteors = function () { return meteors; };
+    _testHook.COSMIC_EVENT_DEFS = COSMIC_EVENT_DEFS;
+    _testHook.updateCosmicEvents = updateCosmicEvents;
+    _testHook.drawCosmicBackground = drawCosmicBackground;
+    _testHook.drawCosmicForeground = drawCosmicForeground;
+    _testHook.getBossTelegraph = function () { return bossTelegraph; };
+    _testHook.setBossTelegraph = function (bt) { bossTelegraph = bt; };
+    _testHook.exportSave = exportSave;
+    _testHook.importSave = importSave;
+    _testHook.openSettings = openSettings;
+    _testHook.closeSettings = closeSettings;
+    _testHook.drawSettings = drawSettings;
+    _testHook.handleSettingsClick = handleSettingsClick;
+    _testHook.addXp = addXp;
+    _testHook.choosePerk = choosePerk;
+    _testHook.getPerkModal = function () { return { modal: perkModal, cards: perkCards, pending: pendingPerkChoices.length, sel: perkSel, rects: perkCardRects }; };
+    _testHook.PERK_DEFS = PERK_DEFS;
+    _testHook.queuePerkChoice = queuePerkChoice;
+    _testHook.openNextPerkModal = openNextPerkModal;
+    _testHook.drawPerkModal = drawPerkModal;
+    _testHook.drawHUD = drawHUD;
+    _testHook.openHelp = openHelp;
+    _testHook.closeHelp = closeHelp;
+    _testHook.updatePlayer = updatePlayer;
+    _testHook.WEAPON_EVOLUTIONS = WEAPON_EVOLUTIONS;
+    _testHook.getSynergyForElement = getSynergyForElement;
+    _testHook.checkWeaponEvolution = checkWeaponEvolution;
+    _testHook.getEvolvedWpn = function (pIdx) { return players[pIdx || 0].evolvedWpn; };
+    _testHook.setEvolvedWpn = function (pIdx, evoId) { players[pIdx || 0].evolvedWpn = evoId; };
+    Object.defineProperty(_testHook, 'disruptionMines', { get: function () { return disruptionMines; }, enumerable: true, configurable: true });
+    _testHook.spawnDisruptionMine = spawnDisruptionMine;
+    _testHook.explodeDisruptionMine = explodeDisruptionMine;
+    _testHook.updateDisruptionMines = updateDisruptionMines;
+    _testHook.drawAegis = drawAegis;
+    _testHook.drawHealer = drawHealer;
+    _testHook.drawMinelayer = drawMinelayer;
+    _testHook.MUTATOR_DEFS = MUTATOR_DEFS;
+    _testHook.getDailyMutators = getDailyMutators;
+    _testHook.getActiveMutators = function () { return activeMutators; };
+    _testHook.setActiveMutators = function (m) { activeMutators = m; };
+    _testHook.hasMutator = hasMutator;
+    _testHook.getDailyVampKillCount = function () { return dailyVampKillCount; };
+    _testHook.setDailyVampKillCount = function (n) { dailyVampKillCount = n; };
+    _testHook.reset = reset;
+  }
+
+  // ---------- Bucle ----------
+  resize();
+  reset();
+  var last = performance.now();
+  function loop(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    clock += dt;
+    pollPads();
+    // Cámara lenta (jefe derrotado): el mundo usa un dt escalado, la interfaz el real
+    var rdt = dt;
+    if (slowmoT > 0 && state !== 'paused') { dt = rdt * timeScale(); slowmoT -= rdt; }
+    if (state === 'playing' && !perkModal) update(dt);
+
+    var wdt = (state === 'over' && now - overAt < 900) ? dt * 0.3 : dt;
+    if (state !== 'paused') {
+      if (state === 'over') driftWorld(wdt);
+      updateParticles(wdt);
+      updateFloats(wdt);
+      updateBackdrop(wdt);
+    }
+    if (shake > 0) shake -= rdt;
+    if (flash > 0) flash -= rdt * 2.5;
+    dt = rdt;
+
+    if (Math.floor(clock / 5) !== Math.floor((clock - dt) / 5)) saveMeta();
+
+    if (state === 'playing' && !muted) { engineStart(); engineUpdate(); } else engineStop();
+    musicUpdate();
+
+    draw(now);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+<script>
+// Service worker opcional (modo sin conexión al servirlo por https): solo se registra si junto al juego hay un sw.js.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', function () {
+    fetch('sw.js', { method: 'HEAD', cache: 'no-store' }).then(function (r) {
+      if (r.ok) navigator.serviceWorker.register('sw.js').catch(function () {});
+    }).catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
