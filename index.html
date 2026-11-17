@@ -986,96 +986,417 @@
     if (muted) { engineStop(); musicStop(); }
   }
 
-  // ---------- Música de fondo procedural ----------
-  // Secuenciador de 16 pasos por compás. Intensidad 1 = oleada normal, 2 = minijefe, 3 = jefe (más rápida, tonalidad tensa y más capas).
+  // ---------- Música de fondo procedural épica (Synthwave / Space Opera) ----------
+  // Secuenciador de 16 pasos por compás.
+  // Nivel 0 = Menú, Hangar y Mapa estelar (ambient cósmico, pads etéreos y arpegios cristalinos, 96 BPM)
+  // Nivel 1 = Oleadas normales de combate (synthwave heroico, bajo galopante 16th, melodía épica, 120 BPM)
+  // Nivel 2 = Minijefes (darksynth tenso, bajo agresivo sincopado, arpegios rápidos, 134 BPM)
+  // Nivel 3 = Jefes de sector (batalla colosal a 150 BPM, bajo arrollador, percusión masiva, melodía triunfal, fase de furia al 33% HP)
   var music = null;
   var MUS = {
-    1: { bpm: 118, roots: [45, 41, 48, 43], ch: [[57, 60, 64, 69], [53, 57, 60, 65], [52, 55, 60, 64], [55, 59, 62, 67]] },
-    2: { bpm: 132, roots: [45, 41, 48, 43], ch: [[57, 60, 64, 69], [53, 57, 60, 65], [52, 55, 60, 64], [55, 59, 62, 67]] },
-    3: { bpm: 150, roots: [45, 41, 38, 40], ch: [[57, 60, 64, 69], [53, 57, 60, 65], [50, 53, 57, 62], [52, 56, 59, 64]] }
+    0: { bpm: 96, roots: [45, 41, 48, 43], ch: [[57, 60, 64, 67], [53, 57, 60, 64], [52, 55, 60, 62], [55, 59, 62, 64]] }, // Am7 - Fmaj7 - C9 - G6
+    1: { bpm: 120, roots: [45, 41, 48, 43], ch: [[57, 60, 64, 69], [53, 57, 60, 65], [52, 55, 60, 64], [55, 59, 62, 67]] }, // Am - F - C - G
+    2: { bpm: 134, roots: [38, 46, 43, 45], ch: [[50, 53, 57, 62], [58, 62, 65, 70], [55, 58, 62, 67], [57, 61, 64, 69]] }, // Dm - Bb - Gm - A7
+    3: { bpm: 150, roots: [38, 46, 43, 45], ch: [[50, 53, 57, 62], [58, 62, 65, 70], [55, 58, 62, 67], [57, 61, 64, 69]] }  // Dm - Bb - Gm - A7
   };
+
+  // Melodías épicas multibar (64 pasos = 4 compases completos de 16 semicorcheas)
+  // Melodía heroica de combate (Oleadas normales - Nivel 1):
+  var LEAD_WAVE = [
+    69, -1, -1, -1,  72, -1, 74, -1,  76, -1, -1, -1,  74, -1, 72, -1, // Am: A4 -> C5 -> D5 -> E5 -> D5 -> C5
+    69, -1, -1, -1,  72, -1, 74, -1,  77, -1, 76, -1,  74, -1, 72, -1, // F:  A4 -> C5 -> D5 -> F5 -> E5 -> D5 -> C5
+    72, -1, -1, -1,  76, -1, 79, -1,  81, -1, 79, -1,  76, -1, 74, -1, // C:  C5 -> E5 -> G5 -> A5 -> G5 -> E5 -> D5
+    71, -1, -1, -1,  74, -1, 76, -1,  74, -1, 72, -1,  71, -1, 69, -1  // G:  B4 -> D5 -> E5 -> D5 -> C5 -> B4 -> A4
+  ];
+
+  // Melodía colosal de batalla contra Jefe de Sector (Nivel 3):
+  var LEAD_BOSS = [
+    62, -1, -1, 65,  69, -1, -1, 72,  74, -1, -1, -1,  72, -1, 69, -1, // Dm: D4 -> F4 -> A4 -> C5 -> D5 -> C5 -> A4
+    70, -1, -1, 74,  77, -1, 76, -1,  74, -1, -1, -1,  72, -1, 70, -1, // Bb: Bb4 -> D5 -> F5 -> E5 -> D5 -> C5 -> Bb4
+    67, -1, -1, 70,  74, -1, 77, -1,  79, -1, -1, -1,  77, -1, 76, -1, // Gm: G4 -> Bb4 -> D5 -> F5 -> G5 -> F5 -> E5
+    73, -1, -1, 76,  81, -1, 79, -1,  76, -1, 74, -1,  73, -1, 76, -1  // A7: C#5 -> E5 -> A5 (clímax!) -> G5 -> E5 -> D5 -> C#5 -> E5
+  ];
+
+  // Compatibilidad hacia atrás
   var LEAD = [3, -1, -1, 2, -1, -1, 1, -1, 3, -1, 2, -1, 0, -1, 1, -1];
+
   function mf(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
   function musicStart() {
     if (music || muted || settings.musVol <= 0 || !ensureAudio()) return;
     try {
       var g = audioCtx.createGain(), lp = audioCtx.createBiquadFilter();
       lp.type = 'lowpass'; lp.frequency.value = 18000;
+      var initLvl = (state === 'playing' ? 1 : 0);
+      var targetGain = (state === 'playing' ? 0.48 : 0.28) * settings.musVol;
       g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-      g.gain.linearRampToValueAtTime(0.5 * settings.musVol, audioCtx.currentTime + 1.2);
+      g.gain.linearRampToValueAtTime(targetGain, audioCtx.currentTime + 0.8);
       g.connect(lp); lp.connect(audioCtx.destination);
-      music = { g: g, lp: lp, next: audioCtx.currentTime + 0.1, step: 0, lvl: 1, want: 1, duck: false };
+      music = { g: g, lp: lp, next: audioCtx.currentTime + 0.08, step: 0, lvl: initLvl, want: initLvl, duck: false, bossRage: false };
     } catch (e) { music = null; }
   }
+
   function musicStop() {
     if (!music) return;
     var m = music; music = null;
-    try { m.g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.15); setTimeout(function () { try { m.lp.disconnect(); } catch (x) {} }, 1200); } catch (x) {}
+    try {
+      m.g.gain.setTargetAtTime(0, audioCtx.currentTime, 0.15);
+      setTimeout(function () { try { m.lp.disconnect(); } catch (x) {} }, 800);
+    } catch (x) {}
   }
-  function mVoice(freq, t, dur, type, vol, cut) {
-    var o = audioCtx.createOscillator(), g = audioCtx.createGain(), out = g;
-    o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    if (cut) { var f = audioCtx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cut; o.connect(f); f.connect(g); } else o.connect(g);
-    out.connect(music.g); o.start(t); o.stop(t + dur + 0.03);
+
+  // Sintetizador polifónico versátil con filtro opcional
+  function mVoice(freq, t, dur, type, vol, cut, rampCut) {
+    if (!music || !audioCtx) return;
+    try {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol, t + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      if (cut) {
+        var f = audioCtx.createBiquadFilter(); f.type = 'lowpass';
+        f.frequency.setValueAtTime(cut, t);
+        if (rampCut) f.frequency.exponentialRampToValueAtTime(rampCut, t + dur);
+        o.connect(f); f.connect(g);
+      } else {
+        o.connect(g);
+      }
+      g.connect(music.g);
+      o.start(t); o.stop(t + dur + 0.03);
+    } catch (e) {}
   }
-  function mKick(t, vol) {
-    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-    o.connect(g); g.connect(music.g); o.start(t); o.stop(t + 0.18);
+
+  // Bajo analógico con cuerpo sub-sine y mordida darksynth
+  function mBass(freq, t, dur, vol, heavy) {
+    if (!music || !audioCtx) return;
+    try {
+      // Sub-bajo profundo
+      var sO = audioCtx.createOscillator(), sG = audioCtx.createGain();
+      sO.type = 'sine'; sO.frequency.value = freq;
+      sG.gain.setValueAtTime(0.0001, t);
+      sG.gain.linearRampToValueAtTime(vol * 0.8, t + 0.006);
+      sG.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      sO.connect(sG); sG.connect(music.g);
+      sO.start(t); sO.stop(t + dur + 0.03);
+
+      // Capa de textura con barrido analógico
+      var bO = audioCtx.createOscillator(), bG = audioCtx.createGain(), bF = audioCtx.createBiquadFilter();
+      bO.type = heavy ? 'sawtooth' : 'triangle';
+      bO.frequency.value = freq;
+      bF.type = 'lowpass';
+      bF.frequency.setValueAtTime(heavy ? 1400 : 700, t);
+      bF.frequency.exponentialRampToValueAtTime(150, t + dur * 0.85);
+      bG.gain.setValueAtTime(0.0001, t);
+      bG.gain.linearRampToValueAtTime(vol * (heavy ? 0.85 : 0.55), t + 0.008);
+      bG.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      bO.connect(bF); bF.connect(bG); bG.connect(music.g);
+      bO.start(t); bO.stop(t + dur + 0.03);
+    } catch (e) {}
   }
+
+  // Pad celestial / orquestal con unísono estéreo desafinado
+  function mPad(freq, t, dur, vol) {
+    if (!music || !audioCtx) return;
+    try {
+      var o1 = audioCtx.createOscillator(), o2 = audioCtx.createOscillator();
+      var g = audioCtx.createGain(), f = audioCtx.createBiquadFilter();
+      o1.type = 'sawtooth'; o1.frequency.value = freq * 1.0022;
+      o2.type = 'sawtooth'; o2.frequency.value = freq * 0.9978;
+      f.type = 'lowpass'; f.frequency.value = 1400;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol, t + 0.12);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o1.connect(f); o2.connect(f); f.connect(g); g.connect(music.g);
+      o1.start(t); o1.stop(t + dur + 0.04);
+      o2.start(t); o2.stop(t + dur + 0.04);
+    } catch (e) {}
+  }
+
+  // Melodía principal heroica con brillo y vibrato expresivo
+  function mLead(freq, t, dur, vol, vibrato) {
+    if (!music || !audioCtx) return;
+    try {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain(), f = audioCtx.createBiquadFilter();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(freq, t);
+      if (vibrato && dur > 0.2) {
+        o.frequency.setValueAtTime(freq, t + 0.08);
+        o.frequency.linearRampToValueAtTime(freq * 1.012, t + 0.15);
+        o.frequency.linearRampToValueAtTime(freq * 0.988, t + 0.22);
+        o.frequency.linearRampToValueAtTime(freq * 1.01, t + 0.29);
+        o.frequency.linearRampToValueAtTime(freq, t + dur);
+      }
+      f.type = 'lowpass'; f.frequency.value = 3800;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(f); f.connect(g); g.connect(music.g);
+      o.start(t); o.stop(t + dur + 0.04);
+    } catch (e) {}
+  }
+
+  // Bombo contundente con caída de tono dinámica
+  function mKick(t, vol, heavy) {
+    if (!music || !audioCtx) return;
+    try {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.setValueAtTime(heavy ? 175 : 150, t);
+      o.frequency.exponentialRampToValueAtTime(36, t + 0.11);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + (heavy ? 0.18 : 0.14));
+      o.connect(g); g.connect(music.g);
+      o.start(t); o.stop(t + 0.2);
+    } catch (e) {}
+  }
+
+  // Caja ochentera synthwave: cuerpo resonante + látigo de ruido filtrado
+  function mSnare(t, vol) {
+    if (!music || !audioCtx) return;
+    try {
+      var o = audioCtx.createOscillator(), g1 = audioCtx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(200, t);
+      o.frequency.exponentialRampToValueAtTime(80, t + 0.08);
+      g1.gain.setValueAtTime(vol * 0.75, t);
+      g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+      o.connect(g1); g1.connect(music.g);
+      o.start(t); o.stop(t + 0.1);
+
+      var s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g2 = audioCtx.createGain();
+      s.buffer = getNoise(); f.type = 'bandpass'; f.frequency.value = 2300;
+      g2.gain.setValueAtTime(vol * 0.9, t);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      s.connect(f); f.connect(g2); g2.connect(music.g);
+      s.start(t, Math.random() * 0.5); s.stop(t + 0.18);
+    } catch (e) {}
+  }
+
+  // Charles de alta definición metálica
+  function mHat(t, vol, open) {
+    if (!music || !audioCtx) return;
+    try {
+      var dur = open ? 0.13 : 0.035;
+      var s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+      s.buffer = getNoise(); f.type = 'highpass'; f.frequency.value = 7500;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(f); f.connect(g); g.connect(music.g);
+      s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.02);
+    } catch (e) {}
+  }
+
+  // Platillo Crash de entrada y acentos estelares
+  function mCrash(t, vol) {
+    if (!music || !audioCtx) return;
+    try {
+      var s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+      s.buffer = getNoise(); f.type = 'highpass'; f.frequency.value = 4200;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+      s.connect(f); f.connect(g); g.connect(music.g);
+      s.start(t, Math.random() * 0.5); s.stop(t + 1.15);
+    } catch (e) {}
+  }
+
+  // Tom electrónico retro para redobles
+  function mTom(freq, t, vol) {
+    if (!music || !audioCtx) return;
+    try {
+      var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(freq, t);
+      o.frequency.exponentialRampToValueAtTime(freq * 0.45, t + 0.11);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
+      o.connect(g); g.connect(music.g);
+      o.start(t); o.stop(t + 0.14);
+    } catch (e) {}
+  }
+
   function mNoise(t, vol, dur, type, freq) {
-    var s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
-    s.buffer = getNoise(); f.type = type; f.frequency.value = freq;
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f); f.connect(g); g.connect(music.g); s.start(t, Math.random() * 0.8); s.stop(t + dur + 0.02);
+    if (!music || !audioCtx) return;
+    try {
+      var s = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+      s.buffer = getNoise(); f.type = type; f.frequency.value = freq;
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(f); f.connect(g); g.connect(music.g);
+      s.start(t, Math.random() * 0.8); s.stop(t + dur + 0.02);
+    } catch (e) {}
   }
+
   function musicStep(st, t, sd) {
-    var L = music.lvl, M = MUS[L], bar = Math.floor(st / 16) % 4, s = st % 16, root = M.roots[bar], ch = M.ch[bar];
-    // Bajo
-    if (L === 3) mVoice(mf(root + (s % 4 === 2 ? 12 : 0)), t, sd * 0.9, 'sawtooth', 0.07, 700);
-    else if (s % 2 === 0) mVoice(mf(root + (s % 4 === 2 ? 12 : 0)), t, sd * 1.8, L === 2 ? 'sawtooth' : 'triangle', L === 2 ? 0.06 : 0.09, 520);
-    // Arpegio
-    if (L === 1) { if (s % 2 === 0) mVoice(mf(ch[(s / 2) % 4] + 12), t, sd * 1.6, 'triangle', 0.022); }
-    else mVoice(mf(ch[s % 4] + 12), t, sd * 0.9, L === 3 ? 'sawtooth' : 'square', L === 3 ? 0.02 : 0.016, L === 3 ? 3200 : 2200);
-    // Melodía principal (solo jefe)
-    if (L === 3 && LEAD[s] >= 0) mVoice(mf(ch[LEAD[s]] + 24), t, sd * 2.4, 'square', 0.028, 4200);
-    // Pad sostenido al inicio del compás
-    if (s === 0) for (var k = 0; k < 3; k++) mVoice(mf(ch[k]), t, sd * 15, 'sine', L === 3 ? 0.018 : 0.025);
-    // Batería
-    if (L === 1) { if (s === 0 || s === 8 || (bar % 2 && s === 10)) mKick(t, 0.22); if (s % 4 === 2) mNoise(t, 0.025, 0.03, 'highpass', 7000); }
-    else {
-      if (s % 4 === 0 || (L === 3 && s === 14)) mKick(t, L === 3 ? 0.3 : 0.26);
-      if (s === 4 || s === 12) mNoise(t, L === 3 ? 0.12 : 0.09, 0.12, 'bandpass', 1800);
-      if (L === 3 || s % 2 === 1) mNoise(t, s % 2 ? 0.035 : 0.018, 0.03, 'highpass', 7500);
-      if (L === 3 && s === 0 && bar === 0) mNoise(t, 0.08, 0.9, 'highpass', 5000);
+    var L = music.lvl, M = MUS[L] || MUS[1];
+    var bar = Math.floor(st / 16) % 4, s = st % 16, st64 = st % 64;
+    var root = M.roots[bar], ch = M.ch[bar];
+
+    if (L === 0) {
+      // ===== Pista 0: Hangar Cósmico y Mapa Estelar (Ambient) =====
+      if (s === 0) {
+        mPad(mf(ch[0]), t, sd * 15, 0.038);
+        mPad(mf(ch[2]), t, sd * 15, 0.032);
+        mBass(mf(root), t, sd * 6, 0.05, false);
+      } else if (s === 8) {
+        mPad(mf(ch[1] + 12), t, sd * 7, 0.022);
+        mBass(mf(root + 7), t, sd * 5, 0.035, false);
+      }
+      if (s === 0 || s === 3 || s === 6 || s === 8 || s === 11 || s === 14) {
+        var arpIdx = ((s * 3) >> 2) % 4;
+        mVoice(mf(ch[arpIdx] + 12), t, sd * 2.2, 'triangle', 0.015, 2200);
+      }
+      if (s === 0 && bar === 0) mNoise(t, 0.02, 1.4, 'lowpass', 1200);
+      return;
+    }
+
+    if (L === 1) {
+      // ===== Pista 1: Órbita Heroica (Oleadas normales de combate) =====
+      // Bajo synthwave galopante en semicorcheas
+      var bNote = (s % 2 === 0 ? root : root + 12);
+      if (bar === 3 && s >= 12) bNote = root + [7, 9, 10, 12][s - 12];
+      mBass(mf(bNote), t, sd * 0.95, 0.072, false);
+
+      // Percusión
+      if (s % 4 === 0) mKick(t, 0.25, false);
+      if (s === 4 || s === 12) mSnare(t, 0.16);
+      mHat(t, (s % 4 === 2 ? 0.04 : 0.018), (s === 14));
+      if (bar === 0 && s === 0) mCrash(t, 0.09);
+      if (bar === 3 && s >= 12) mTom(250 - (s - 12) * 45, t, 0.14);
+
+      // Arpegio rítmico
+      var arpPattern = [0, 1, 2, 3, 2, 1, 0, 2, 3, 1, 2, 3, 2, 1, 3, 2];
+      mVoice(mf(ch[arpPattern[s]] + 12), t, sd * 0.85, 'sawtooth', 0.015, 2800);
+
+      // Pad armónico
+      if (s === 0) {
+        mPad(mf(ch[0]), t, sd * 14, 0.022);
+        mPad(mf(ch[2]), t, sd * 14, 0.018);
+      }
+
+      // Melodía principal heroica
+      if (LEAD_WAVE[st64] > 0) {
+        mLead(mf(LEAD_WAVE[st64]), t, sd * 2.6, 0.038, true);
+      }
+      return;
+    }
+
+    if (L === 2) {
+      // ===== Pista 2: Infiltración Cyber (Minijefe) =====
+      // Bajo agresivo sincopado
+      if (s === 0 || s === 2 || s === 3 || s === 6 || s === 8 || s === 10 || s === 11 || s === 14) {
+        var mbNote = (s % 4 === 2 || s % 4 === 3 ? root + 12 : root);
+        mBass(mf(mbNote), t, sd * 0.9, 0.085, true);
+      }
+
+      // Percusión
+      if (s === 0 || s === 3 || s === 8 || s === 10) mKick(t, 0.3, true);
+      if (s === 4 || s === 12) mSnare(t, 0.2);
+      mHat(t, s % 2 === 1 ? 0.045 : 0.022, s === 14);
+      if (bar === 0 && s === 0) mCrash(t, 0.1);
+      if (bar === 3 && s >= 12) mTom(270 - (s - 12) * 45, t, 0.16);
+
+      // Arpegio tenso continuo
+      mVoice(mf(ch[s % 4] + 12), t, sd * 0.75, 'sawtooth', 0.022, 3400);
+
+      // Stabs sintéticos
+      if (s === 0 || s === 6 || s === 12) {
+        mVoice(mf(ch[3] + 12), t, sd * 1.6, 'square', 0.03, 2600);
+      }
+      return;
+    }
+
+    if (L === 3) {
+      // ===== Pista 3: Batalla Colosal contra el Jefe del Sector =====
+      // Bajo arrollador y galopante
+      var bossGallop = [1, 0, 1, 1,  1, 0, 1, 1,  1, 0, 1, 1,  1, 1, 1, 1];
+      if (bossGallop[s]) {
+        var bbNote = (s % 4 === 3 ? root + 12 : root);
+        if (bar === 3 && s >= 12) bbNote = root + [7, 8, 11, 12][s - 12];
+        mBass(mf(bbNote), t, sd * 0.9, 0.095, true);
+      }
+
+      // Percusión de combate pesada
+      var kickHit = (s === 0 || s === 2 || s === 6 || s === 8 || s === 10 || s === 14);
+      if (music.bossRage && s % 2 === 0) kickHit = true; // Doble bombo acelerado en furia
+      if (kickHit) mKick(t, music.bossRage ? 0.36 : 0.32, true);
+
+      if (s === 4 || s === 12) mSnare(t, 0.24);
+      mHat(t, s % 2 === 1 ? 0.05 : 0.025, s === 14);
+      if (bar === 0 && s === 0) mCrash(t, 0.14);
+      if (bar === 3 && s >= 12) mTom(290 - (s - 12) * 50, t, 0.18);
+
+      // Acordes de viento/metales sintéticos masivos
+      if (s === 0 || s === 6 || s === 12) {
+        mPad(mf(ch[0]), t, sd * 4, 0.036);
+        mPad(mf(ch[2]), t, sd * 4, 0.03);
+      }
+
+      // Melodía épica monumental del jefe
+      if (LEAD_BOSS[st64] > 0) {
+        mLead(mf(LEAD_BOSS[st64]), t, sd * 2.8, 0.046, true);
+      }
+
+      // Arpegio de batalla continuo
+      mVoice(mf(ch[s % 4] + 12), t, sd * 0.8, 'sawtooth', 0.022, 3800);
+
+      // Capa de alarma / adrenalina en Fase 3 de Furia (<35% HP)
+      if (music.bossRage) {
+        mVoice(mf(ch[(s * 3) % 4] + 36), t, sd * 0.5, 'square', 0.02, 6500);
+      }
     }
   }
+
   function musicUpdate() {
-    var want = state === 'playing' && !muted && settings.musVol > 0;
+    var inPlay = (state === 'playing' || state === 'paused');
+    var inMenu = (state === 'menu' || state === 'map' || state === 'shop' || state === 'help');
+    var want = (inPlay || inMenu) && !muted && settings.musVol > 0;
     if (!want) { musicStop(); return; }
     musicStart();
     if (!music) return;
     try {
-      if (music.g) music.g.gain.setTargetAtTime(0.5 * settings.musVol, audioCtx.currentTime, 0.1);
-      var lv = 1, i;
-      for (i = 0; i < enemies.length; i++) { if (enemies[i].kind === 'boss') { lv = 3; break; } if (enemies[i].kind === 'miniboss') lv = 2; }
-      music.want = lv;
-      // Filtro "bajo el agua" durante la cámara lenta del jefe
-      var duck = slowmoT > 0;
-      if (duck !== music.duck) { music.duck = duck; music.lp.frequency.setTargetAtTime(duck ? 420 : 18000, audioCtx.currentTime, duck ? 0.05 : 0.6); }
-      var now = audioCtx.currentTime;
-      if (music.next < now - 0.3) music.next = now + 0.05; // tras una pausa del navegador, no recuperar pasos atrasados
-      while (music.next < now + 0.15) {
-        if (music.step % 16 === 0 && music.lvl !== music.want) {
-          // Al subir de intensidad se cambia al inicio del compás siguiente; con un redoble de entrada
-          if (music.want > music.lvl) mNoise(music.next, 0.1, 0.6, 'highpass', 4000);
-          music.lvl = music.want; music.step = 0;
+      var targetGain = (inPlay ? 0.48 : 0.28) * settings.musVol;
+      if (music.g) music.g.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.15);
+
+      var lv = 0, i, bossRage = false;
+      if (inPlay) {
+        lv = 1;
+        for (i = 0; i < enemies.length; i++) {
+          if (enemies[i].kind === 'boss') {
+            lv = 3;
+            if (enemies[i].hp / (enemies[i].maxhp || 1) <= 0.35 || enemies[i].ph >= 2) bossRage = true;
+            break;
+          }
+          if (enemies[i].kind === 'miniboss') lv = 2;
         }
-        var sd = 60 / MUS[music.lvl].bpm / 4;
+      }
+      music.want = lv;
+      music.bossRage = bossRage;
+
+      // Filtro "bajo el agua" durante la pausa y cámara lenta tras derrotar al jefe
+      var duck = slowmoT > 0 || state === 'paused';
+      if (duck !== music.duck) {
+        music.duck = duck;
+        music.lp.frequency.setTargetAtTime(duck ? 420 : 18000, audioCtx.currentTime, duck ? 0.05 : 0.6);
+      }
+
+      var now = audioCtx.currentTime;
+      if (music.next < now - 0.3) music.next = now + 0.05;
+
+      while (music.next < now + 0.15) {
+        // Transición instantánea si salimos del menú al juego
+        if (music.lvl === 0 && music.want > 0) {
+          music.lvl = music.want;
+          music.step = 0;
+        } else if (music.step % 16 === 0 && music.lvl !== music.want) {
+          if (music.want > music.lvl) mNoise(music.next, 0.12, 0.6, 'highpass', 4000);
+          music.lvl = music.want;
+          music.step = 0;
+        }
+
+        var curM = MUS[music.lvl] || MUS[1];
+        var sd = 60 / curM.bpm / 4;
         musicStep(music.step, music.next, sd);
-        music.next += sd; music.step++;
+        music.next += sd;
+        music.step++;
       }
     } catch (e) {}
   }
