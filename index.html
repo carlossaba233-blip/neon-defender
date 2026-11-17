@@ -176,6 +176,141 @@
   loadBest();
   var vacOn = false, vacAt = 0, cheat = { god: false, wpn: false }, codeMsg = '', codeMsgT = 0, codeRects = [], wallet = 0, runCoins = 0, coins = [], gems = 0, runGems = 0, gemDrops = [], shopSel = 0, shopPrev = 'menu', shopRects = [], shopMsg = '', shopMsgT = 0;
 
+  // ---------- Sistema Roguelite de Perks en Partida ----------
+  var perkModal = false, perkCards = [], perkCardRects = [], perkSel = 0, perkPlayer = null, pendingPerkChoices = [], mousePos = null;
+  var PERK_DEFS = [
+    {
+      id: 'crit', name: 'Impacto Crítico', icon: '🎯', rarity: 'rare', maxLv: 3, col: '#ff3d71',
+      desc: function (lv) { return ['+15 % prob. de crítico (×2.5 daño)', '+30 % prob. de crítico (×2.5 daño)', '+45 % prob. de crítico (×2.5 daño)'][lv - 1]; }
+    },
+    {
+      id: 'ricochet', name: 'Rebote Cuántico', icon: '⚡', rarity: 'epic', maxLv: 2, col: '#00f0ff',
+      desc: function (lv) { return ['Tus balas rebotan 1 vez en los bordes', 'Tus balas rebotan hasta 2 veces en los bordes'][lv - 1]; }
+    },
+    {
+      id: 'vampire', name: 'Drenaje de Plasma', icon: '🧛', rarity: 'epic', maxLv: 3, col: '#ff007f',
+      desc: function (lv) { return ['5 % prob. de curar 1 vida al matar un enemigo', '9 % prob. de curar 1 vida al matar un enemigo', '14 % prob. de curar 1 vida al matar un enemigo'][lv - 1]; }
+    },
+    {
+      id: 'grazeNova', name: 'Onda por Rozadura', icon: '💫', rarity: 'rare', maxLv: 2, col: '#ffea00',
+      desc: function (lv) { return ['Rozar balas enemigas emite una micro-onda destructiva', 'Onda de rozadura con doble radio y daño'][lv - 1]; }
+    },
+    {
+      id: 'drone', name: 'Dron Centinela', icon: '🛰️', rarity: 'rare', maxLv: 3, col: '#7dffa0',
+      desc: function (lv) { return ['Invoca un dron de escolta orbital permanente', 'Añade un 2.º dron de escolta', 'Añade un 3.er dron de escolta'][lv - 1]; }
+    },
+    {
+      id: 'rapid', name: 'Acelerador de Pulso', icon: '⏩', rarity: 'common', maxLv: 3, col: '#ffaa00',
+      desc: function (lv) { return ['+20 % cadencia de disparo', '+40 % cadencia de disparo', '+60 % cadencia de disparo'][lv - 1]; }
+    },
+    {
+      id: 'speed', name: 'Impulsores de Iones', icon: '🚀', rarity: 'common', maxLv: 3, col: '#00e5ff',
+      desc: function (lv) { return ['+18 % vel. de nave y recarga rápida de dash', '+36 % vel. de nave y dash más largo', '+54 % vel. de nave y dash fulgurante'][lv - 1]; }
+    },
+    {
+      id: 'micromissiles', name: 'Enjambre Pasivo', icon: '🚀', rarity: 'rare', maxLv: 3, col: '#b347ff',
+      desc: function (lv) { return ['Cada 8 disparos lanzas 2 micromisiles teledirigidos', 'Cada 6 disparos lanzas 3 micromisiles', 'Cada 4 disparos lanzas 4 micromisiles'][lv - 1]; }
+    },
+    {
+      id: 'frostAura', name: 'Campo Criogénico', icon: '❄️', rarity: 'rare', maxLv: 2, col: '#99e6ff',
+      desc: function (lv) { return ['Ralentiza a enemigos cercanos un 30 %', 'Ralentiza a enemigos cercanos un 50 % y les hace daño'][lv - 1]; }
+    },
+    {
+      id: 'magnetMaster', name: 'Vórtice Magnético', icon: '🧲', rarity: 'common', maxLv: 2, col: '#ffd54a',
+      desc: function (lv) { return ['+60 % radio de imán de monedas y gemas', '+120 % radio de imán y atracción veloz'][lv - 1]; }
+    },
+    {
+      id: 'shieldSurge', name: 'Carga de Escudo', icon: '🛡️', rarity: 'rare', maxLv: 3, col: '#4deeea',
+      desc: function (lv) { return ['Genera un escudo de 4 s cada 28 bajas', 'Genera escudo cada 20 bajas', 'Genera escudo cada 14 bajas'][lv - 1]; }
+    },
+    {
+      id: 'chainSpark', name: 'Relámpago Estático', icon: '⚡', rarity: 'rare', maxLv: 2, col: '#ffff00',
+      desc: function (lv) { return ['18 % prob. de electrocutar a 2 enemigos cercanos', '36 % prob. de electrocutar a 3 enemigos cercanos'][lv - 1]; }
+    }
+  ];
+
+  function addXp(P, amount) {
+    if (!P || !P.alive || amount <= 0) return;
+    P.runXp = (P.runXp || 0) + amount;
+    P.runNextXp = P.runNextXp || 90;
+    P.runLv = P.runLv || 1;
+    while (P.runXp >= P.runNextXp) {
+      P.runXp -= P.runNextXp;
+      P.runLv++;
+      P.runNextXp = Math.round(90 * Math.pow(P.runLv, 1.25));
+      queuePerkChoice(P);
+    }
+  }
+
+  function queuePerkChoice(P) {
+    pendingPerkChoices.push(P);
+    floatTxt(P.x, P.y - 45, '¡SUBIDA DE NIVEL ' + P.runLv + '!', '#ffe27a', 24, { vx: 0, vy: -60, life: 1.5 });
+    fanfare();
+    if (!perkModal) openNextPerkModal();
+  }
+
+  function openNextPerkModal() {
+    if (pendingPerkChoices.length === 0) {
+      perkModal = false;
+      return;
+    }
+    var P = pendingPerkChoices[0];
+    var eligible = PERK_DEFS.filter(function (def) {
+      var curLv = (P.perks && P.perks[def.id]) || 0;
+      return curLv < def.maxLv;
+    });
+    if (eligible.length === 0) {
+      P.score += 2500;
+      floatTxt(P.x, P.y - 40, '+2500 PTS (PERKS MÁXIMOS)', '#ffd54a', 20);
+      pendingPerkChoices.shift();
+      if (pendingPerkChoices.length > 0) openNextPerkModal();
+      return;
+    }
+    var pool = eligible.slice();
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(rnd() * (i + 1));
+      var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    perkCards = pool.slice(0, Math.min(3, pool.length)).map(function (def) {
+      var curLv = (P.perks && P.perks[def.id]) || 0;
+      return { def: def, nextLv: curLv + 1, curLv: curLv };
+    });
+    perkSel = 0;
+    perkModal = true;
+    perkPlayer = P;
+  }
+
+  function choosePerk(choiceIdx) {
+    if (!perkModal || !perkCards || !perkCards[choiceIdx]) return;
+    var choice = perkCards[choiceIdx];
+    var P = perkPlayer || players[0];
+    if (!P.perks) P.perks = {};
+    P.perks[choice.def.id] = choice.nextLv;
+    P.perkCount = (P.perkCount || 0) + 1;
+
+    if (choice.def.id === 'drone') {
+      P.drones = Math.max(P.drones || 0, choice.nextLv);
+    } else if (choice.def.id === 'vampire' && P.lives < MAX_LIVES) {
+      P.lives = Math.min(MAX_LIVES, P.lives + 1);
+    }
+
+    powerSound();
+    tone(880, 0.1, 'triangle', 0.08, 0);
+    tone(1320, 0.14, 'triangle', 0.08, 0.08);
+    tone(1760, 0.2, 'triangle', 0.09, 0.16);
+
+    floatTxt(P.x, P.y - 30, '¡' + choice.def.name.toUpperCase() + ' NVL ' + choice.nextLv + '!', choice.def.col, 22, { vx: 0, vy: -50, life: 1.4 });
+    sparksAt(P.x, P.y, 25, [100, 240, 255]);
+
+    pendingPerkChoices.shift();
+    if (pendingPerkChoices.length > 0) {
+      openNextPerkModal();
+    } else {
+      perkModal = false;
+      perkCards = [];
+    }
+  }
+
   // ---------- Misiones diarias y logros ----------
   var MISSION_DEFS = [
     { id: 'kills_rayo',   desc: 'Mata 50 enemigos con Rayo',        type: 'kills_el',  el: 3, target: 50,  rCoins: 80,  rGems: 0 },
@@ -1562,7 +1697,7 @@
 
   function makePlayer(i, n) {
     var px = n === 2 ? (i === 0 ? W * 0.33 : W * 0.67) : W / 2;
-    return { id: i, x: px, y: H - 110, vx: 0, vy: 0, r: 16, hitR: 8, bank: 0, alive: true, score: 0, lives: Math.min(MAX_LIVES, 3 + up.life), weapon: cheat.wpn ? 6 : 1 + up.wpn, shieldT: 0, shieldMax: 8, rfT: 0, rfMax: 8, c2T: 0, c2Max: 10, magT: 0, magMax: 8, superT: 0, supCd: 0, supAng: 0, invT: 1.5, fireCd: 0.3, abCd: 1.5, abT: 0, abInv: 0, dashT: 0, dashVx: 0, dashVy: 0, trail: [], combo: 0, comboBest: 0, comboPop: 0, revived: false, keys: keyState[i], pad: padState[i], drones: 0, grazeCount: 0, grazeT: 0 };
+    return { id: i, x: px, y: H - 110, vx: 0, vy: 0, r: 16, hitR: 8, bank: 0, alive: true, score: 0, lives: Math.min(MAX_LIVES, 3 + up.life), weapon: cheat.wpn ? 6 : 1 + up.wpn, shieldT: 0, shieldMax: 8, rfT: 0, rfMax: 8, c2T: 0, c2Max: 10, magT: 0, magMax: 8, superT: 0, supCd: 0, supAng: 0, invT: 1.5, fireCd: 0.3, abCd: 1.5, abT: 0, abInv: 0, dashT: 0, dashVx: 0, dashVy: 0, trail: [], combo: 0, comboBest: 0, comboPop: 0, revived: false, keys: keyState[i], pad: padState[i], drones: 0, grazeCount: 0, grazeT: 0, runLv: 1, runXp: 0, runNextXp: 90, perks: {}, perkCount: 0, shotCount: 0, surgeKills: 0 };
   }
   function totalScore() { var t = 0; for (var i = 0; i < players.length; i++) t += players[i].score; return t; }
   function anyAlive() { for (var i = 0; i < players.length; i++) if (players[i].alive) return true; return false; }
@@ -1585,6 +1720,7 @@
     floats = []; slowmoT = 0; bossBlast = null;
     enemyFireT = 1.5; levelT = 0; clearT = 0; clearing = false; ft = 0; formAmp = 20; totalEnemies = 1;
     mouseT = null;
+    perkModal = false; perkCards = []; perkCardRects = []; pendingPerkChoices = []; perkSel = 0;
   }
 
   function startLevel(L, boss, lvl) {
@@ -1596,7 +1732,22 @@
         if (!R.alive) { R.alive = true; R.lives = 1; R.weapon = cheat.wpn ? 6 : (1 + (up.wpn || 0)); R.shieldT = 0; R.invT = 2.5; R.vx = R.vy = 0; R.y = H - 110; powerSound(); }
       }
     }
-    enemies = []; eBullets = []; powerups = []; asteroids = []; spaceMines = []; diveT = 3.5; vacOn = false;
+    enemies = []; eBullets = []; powerups = []; asteroids = []; spaceMines = []; cosmicEvent = null; meteors = []; diveT = 3.5; vacOn = false;
+    if (level >= 3 && !boss && gameMode !== 'bossrush') {
+      var sSec = sectorOf(level);
+      var wNum = (gameMode === 'camp' && typeof camp !== 'undefined') ? (camp.wave || 1) : ((curP && curP.waveNum) || 1);
+      if (gameMode === 'camp' && (wNum === 4 || wNum === 8)) {
+        if (sSec.id === 1) triggerCosmicEvent(wNum === 4 ? 'solar_flare' : 'meteor_shower');
+        else if (sSec.id === 2) triggerCosmicEvent(wNum === 4 ? 'ion_storm' : 'solar_flare');
+        else if (sSec.id >= 3) triggerCosmicEvent(wNum === 4 ? 'black_hole' : 'ion_storm');
+      } else if (gameMode === 'endless' && (endlessWave % 4 === 0)) {
+        var eEvents = ['solar_flare', 'meteor_shower', 'ion_storm', 'black_hole'];
+        triggerCosmicEvent(eEvents[Math.floor((endlessWave / 4) % eEvents.length)]);
+      } else if (gameMode === 'daily' && (dailyWave % 3 === 0)) {
+        var dEvents = ['meteor_shower', 'solar_flare', 'black_hole', 'ion_storm'];
+        triggerCosmicEvent(dEvents[dailyWave % dEvents.length]);
+      }
+    }
     for (var qP = 0; qP < players.length; qP++) {
       var pl = players[qP];
       pl.shieldT = 0; pl.rfT = 0; pl.c2T = 0; pl.magT = 0; pl.superT = 0; pl.drones = 0;
@@ -2129,6 +2280,371 @@
     }
   }
 
+  // ---------- Peligros Ambientales y Eventos Cósmicos ----------
+  var cosmicEvent = null, meteors = [];
+  var COSMIC_EVENT_DEFS = {
+    solar_flare: { id: 'solar_flare', name: 'Tormenta Solar', col: '#ff7700', dur: 7.5, warnDur: 2.2, desc: 'Corredor seguro. Radiación térmica fuera de la zona.' },
+    meteor_shower: { id: 'meteor_shower', name: 'Lluvia de Meteoros', col: '#ff4422', dur: 8.0, warnDur: 1.8, desc: 'Lluvia de meteoritos destruibles con gemas.' },
+    ion_storm: { id: 'ion_storm', name: 'Tormenta Iónica', col: '#b347ff', dur: 8.5, warnDur: 1.8, desc: 'Nebulosa electromagnética. Sobrecarga de armas y rayos estáticos.' },
+    black_hole: { id: 'black_hole', name: 'Singularidad Cósmica', col: '#00f0ff', dur: 9.0, warnDur: 2.0, desc: 'Micro agujero negro. Atrae naves y devora proyectiles enemigos.' }
+  };
+
+  function triggerCosmicEvent(type) {
+    if (!type || !COSMIC_EVENT_DEFS[type]) {
+      var keys = Object.keys(COSMIC_EVENT_DEFS);
+      type = keys[Math.floor(rnd() * keys.length)];
+    }
+    var def = COSMIC_EVENT_DEFS[type];
+    var ev = {
+      type: type,
+      name: def.name,
+      col: def.col,
+      t: 0,
+      dur: def.dur,
+      warnDur: def.warnDur,
+      state: 'warning',
+      data: {}
+    };
+
+    if (type === 'solar_flare') {
+      var sw = Math.max(90, Math.floor(W * 0.28));
+      var sx = Math.floor(20 + rnd() * (W - sw - 40));
+      ev.data.safeZone = { x: sx, w: sw };
+      ev.data.tickT = 0;
+    } else if (type === 'meteor_shower') {
+      ev.data.spawnT = 0;
+      ev.data.nextSpawn = 0.3;
+    } else if (type === 'ion_storm') {
+      ev.data.zapT = 0.6;
+    } else if (type === 'black_hole') {
+      ev.data.x = Math.floor(W * 0.5 + (rnd() - 0.5) * (W * 0.45));
+      ev.data.y = Math.floor(H * 0.38 + (rnd() - 0.5) * (H * 0.16));
+      ev.data.pullR = 240;
+      ev.data.coreR = 26;
+      ev.data.spin = 0;
+    }
+
+    cosmicEvent = ev;
+    tone(460, 0.15, 'sawtooth', 0.06, 0);
+    return ev;
+  }
+
+  function updateCosmicEvents(dt) {
+    if (!cosmicEvent) {
+      if (meteors.length > 0) updateMeteors(dt);
+      return;
+    }
+    var ev = cosmicEvent;
+    ev.t += dt;
+
+    if (ev.state === 'warning') {
+      if (ev.t >= ev.warnDur) {
+        ev.state = 'active';
+        ev.t = 0;
+        tone(660, 0.2, 'sawtooth', 0.08, 0);
+        fanfare();
+      }
+      return;
+    }
+
+    if (ev.state === 'active') {
+      if (ev.type === 'solar_flare') {
+        ev.data.tickT += dt;
+        if (ev.data.tickT >= 1.6) {
+          ev.data.tickT = 0;
+          var sz = ev.data.safeZone;
+          for (var q = 0; q < players.length; q++) {
+            var P = players[q];
+            if (!P.alive || P.invT > 0 || P.enterT > 0) continue;
+            if (P.x < sz.x || P.x > sz.x + sz.w) {
+              if (P.shieldT > 0) {
+                P.shieldT = 0;
+                floatTxt(P.x, P.y - 30, '¡ESCUDO FUNDIDO!', '#ff7700', 16);
+                sparksAt(P.x, P.y, 8, [255, 120, 20]);
+              } else {
+                hurtPlayer(P);
+                floatTxt(P.x, P.y - 30, '¡DAÑO SOLAR!', '#ff3d6e', 16);
+              }
+            }
+          }
+          for (var ei = 0; ei < enemies.length; ei++) {
+            var fe = enemies[ei];
+            if (fe.y > 0 && (fe.x < sz.x || fe.x > sz.x + sz.w)) {
+              fe.hp -= 1.2; fe.hit = 0.08;
+              dmgNum(fe, 1.2, '#ff7700');
+              sparksAt(fe.x, fe.y, 4, [255, 120, 20]);
+              if (fe.hp <= 0) { killEnemy(ei, players[0]); ei--; }
+            }
+          }
+        }
+      } else if (ev.type === 'meteor_shower') {
+        ev.data.spawnT += dt;
+        if (ev.data.spawnT >= ev.data.nextSpawn) {
+          ev.data.spawnT = 0;
+          ev.data.nextSpawn = 0.35 + rnd() * 0.35;
+          meteors.push({
+            x: 20 + rnd() * (W - 40),
+            y: -30,
+            vx: (rnd() - 0.5) * 70,
+            vy: 200 + rnd() * 110,
+            r: 13 + rnd() * 10,
+            hp: 2 + Math.floor(rnd() * 2),
+            rot: rnd() * TAU,
+            vRot: (rnd() - 0.5) * 5
+          });
+        }
+      } else if (ev.type === 'ion_storm') {
+        ev.data.zapT -= dt;
+        if (ev.data.zapT <= 0) {
+          ev.data.zapT = 0.5 + rnd() * 0.5;
+          var zx = 20 + rnd() * (W - 40);
+          zaps.push({ x1: zx, y1: 0, x2: zx + (rnd() - 0.5) * 60, y2: H * 0.6, t: 0.18 });
+          tone(800, 0.04, 'square', 0.03, 0);
+          for (var qz = 0; qz < players.length; qz++) {
+            var Pz = players[qz];
+            if (Pz.alive) { Pz.fireCd = Math.min(Pz.fireCd, 0.03); }
+          }
+          if (enemies.length > 0) {
+            var re = enemies[Math.floor(rnd() * enemies.length)];
+            if (re && re.y > 0) {
+              re.hp -= 1.5; re.hit = 0.1;
+              dmgNum(re, 1.5, '#b347ff');
+              sparksAt(re.x, re.y, 6, [179, 71, 255]);
+            }
+          }
+        }
+      } else if (ev.type === 'black_hole') {
+        var bh = ev.data;
+        bh.spin += dt * 4;
+        for (var qb = 0; qb < players.length; qb++) {
+          var Pb = players[qb];
+          if (!Pb.alive) continue;
+          var bxDistX = bh.x - Pb.x, bxDistY = bh.y - Pb.y;
+          var bDist = Math.sqrt(bxDistX * bxDistX + bxDistY * bxDistY);
+          if (bDist < bh.pullR && bDist > 1) {
+            var pullForce = (1 - bDist / bh.pullR) * 260;
+            Pb.vx += (bxDistX / bDist) * pullForce * dt;
+            Pb.vy += (bxDistY / bDist) * pullForce * dt;
+          }
+          if (bDist < bh.coreR + Pb.hitR) {
+            if (Pb.invT <= 0 && Pb.enterT <= 0) {
+              hurtPlayer(Pb);
+              floatTxt(Pb.x, Pb.y - 25, '¡HORIZONTE DE SUCESOS!', '#00f0ff', 16);
+            }
+          }
+        }
+        for (var ebi = 0; ebi < enemies.length; ebi++) {
+          var eb = enemies[ebi];
+          var edx = bh.x - eb.x, edy = bh.y - eb.y;
+          var edist = Math.sqrt(edx * edx + edy * edy);
+          if (edist < bh.pullR && edist > 1) {
+            var epull = (1 - edist / bh.pullR) * 190;
+            eb.x += (edx / edist) * epull * dt;
+            eb.y += (edy / edist) * epull * dt;
+          }
+          if (edist < bh.coreR + eb.r) {
+            eb.hp -= 2.2 * dt;
+            eb.hit = 0.05;
+            if (eb.hp <= 0) { killEnemy(ebi, players[0]); ebi--; }
+          }
+        }
+        for (var bbi = eBullets.length - 1; bbi >= 0; bbi--) {
+          var ebBullet = eBullets[bbi];
+          var bdx = bh.x - ebBullet.x, bdy = bh.y - ebBullet.y;
+          var bdist = Math.sqrt(bdx * bdx + bdy * bdy);
+          if (bdist < bh.coreR + 10) {
+            eBullets.splice(bbi, 1);
+            sparksAt(bh.x, bh.y, 4, [0, 240, 255]);
+          }
+        }
+      }
+
+      if (ev.t >= ev.dur) {
+        if (ev.type === 'black_hole') {
+          addP({ t: 'ring', x: ev.data.x, y: ev.data.y, r: 260, c: '#00f0ff', grow: true, life: 0.5 });
+          flash = 0.5; shake = 0.3;
+          eBullets = [];
+          explosionSound(1.5);
+        }
+        cosmicEvent = null;
+        for (var qf = 0; qf < players.length; qf++) {
+          if (players[qf].alive) players[qf].score += 500;
+        }
+        floatTxt(W / 2, H * 0.32, '¡PELIGRO CÓSMICO SUPERADO! +500 PTS', '#00f0ff', 18, { vx: 0, vy: -50, life: 1.6 });
+        fanfare();
+      }
+    }
+
+    if (meteors.length > 0) updateMeteors(dt);
+  }
+
+  function updateMeteors(dt) {
+    for (var mi = meteors.length - 1; mi >= 0; mi--) {
+      var m = meteors[mi];
+      m.x += m.vx * dt;
+      m.y += m.vy * dt;
+      m.rot += m.vRot * dt;
+
+      if (Math.random() < 0.6) {
+        addP({ t: 'flame', x: m.x + (rnd() - 0.5) * 8, y: m.y - m.r * 0.8, vx: (rnd() - 0.5) * 15, vy: -40, life: 0.25, maxLife: 0.25, c: '#ff5522' });
+      }
+
+      for (var bi = pBullets.length - 1; bi >= 0; bi--) {
+        var b = pBullets[bi];
+        var bdx = b.x - m.x, bdy = b.y - m.y;
+        if (bdx * bdx + bdy * bdy < (m.r + b.r) * (m.r + b.r)) {
+          m.hp -= b.dmg || 1;
+          pBullets.splice(bi, 1);
+          sparksAt(b.x, b.y, 4, [255, 120, 50]);
+          if (m.hp <= 0) break;
+        }
+      }
+
+      if (m.hp <= 0) {
+        explode(m.x, m.y, 0.65);
+        explosionSound(0.7);
+        if (Math.random() < 0.5) {
+          gemDrops.push({ x: m.x, y: m.y, vx: (rnd() - 0.5) * 40, vy: -80, r: 6 });
+        } else {
+          coins.push({ x: m.x, y: m.y, vx: (rnd() - 0.5) * 50, vy: -90, r: 6, v: 5 });
+        }
+        meteors.splice(mi, 1);
+        continue;
+      }
+
+      for (var q = 0; q < players.length; q++) {
+        var P = players[q];
+        if (!P.alive) continue;
+        var pdx = P.x - m.x, pdy = P.y - m.y;
+        if (pdx * pdx + pdy * pdy < (m.r + P.hitR) * (m.r + P.hitR)) {
+          if (P.invT <= 0 && P.enterT <= 0) hurtPlayer(P);
+          explode(m.x, m.y, 0.7);
+          meteors.splice(mi, 1);
+          break;
+        }
+      }
+
+      if (m.y > H + m.r + 30) {
+        meteors.splice(mi, 1);
+      }
+    }
+  }
+
+  function drawCosmicBackground() {
+    if (!cosmicEvent) return;
+    var ev = cosmicEvent;
+    if (ev.type === 'ion_storm') {
+      ctx.save();
+      ctx.globalAlpha = 0.22;
+      var ig = ctx.createRadialGradient(W / 2, H * 0.45, 40, W / 2, H * 0.45, W * 0.7);
+      ig.addColorStop(0, 'rgba(179, 71, 255, 0.4)');
+      ig.addColorStop(0.6, 'rgba(77, 238, 234, 0.15)');
+      ig.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = ig;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    } else if (ev.type === 'solar_flare') {
+      var sz = ev.data.safeZone;
+      if (sz) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(77, 255, 140, 0.08)';
+        ctx.fillRect(sz.x, 0, sz.w, H);
+        glow('#4dff8c', 12);
+        ctx.strokeStyle = '#4dff8c';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(sz.x, 0); ctx.lineTo(sz.x, H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(sz.x + sz.w, 0); ctx.lineTo(sz.x + sz.w, H); ctx.stroke();
+        noGlow();
+
+        ctx.fillStyle = ev.state === 'active' ? 'rgba(255, 120, 20, 0.16)' : 'rgba(255, 120, 20, 0.06)';
+        ctx.fillRect(0, 0, sz.x, H);
+        ctx.fillRect(sz.x + sz.w, 0, W - (sz.x + sz.w), H);
+        ctx.restore();
+      }
+    } else if (ev.type === 'black_hole') {
+      var bh = ev.data;
+      if (bh) {
+        ctx.save();
+        var bg = ctx.createRadialGradient(bh.x, bh.y, bh.coreR * 0.5, bh.x, bh.y, bh.pullR);
+        bg.addColorStop(0, 'rgba(0, 240, 255, 0.35)');
+        bg.addColorStop(0.3, 'rgba(179, 71, 255, 0.2)');
+        bg.addColorStop(0.8, 'rgba(10, 16, 40, 0.1)');
+        bg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.arc(bh.x, bh.y, bh.pullR, 0, TAU); ctx.fill();
+
+        ctx.translate(bh.x, bh.y);
+        ctx.rotate(bh.spin);
+        glow('#00f0ff', 16);
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.7)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bh.coreR * 2.2, bh.coreR * 1.2, 0, 0, TAU);
+        ctx.stroke();
+        noGlow();
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawCosmicForeground() {
+    for (var mi = 0; mi < meteors.length; mi++) {
+      var m = meteors[mi];
+      ctx.save();
+      ctx.translate(m.x, m.y);
+      ctx.rotate(m.rot);
+      glow('#ff5522', 12);
+      ctx.fillStyle = '#ff4422';
+      ctx.beginPath();
+      ctx.arc(0, 0, m.r, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = '#ffd54a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      noGlow();
+      ctx.fillStyle = '#ffe6aa';
+      ctx.beginPath();
+      ctx.arc(-m.r * 0.3, -m.r * 0.3, m.r * 0.35, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (!cosmicEvent) return;
+    var ev = cosmicEvent;
+
+    if (ev.type === 'black_hole') {
+      var bh = ev.data;
+      if (bh) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(bh.x, bh.y, bh.coreR, 0, TAU);
+        ctx.fillStyle = '#02040a';
+        ctx.fill();
+        glow('#00f0ff', 14);
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        noGlow();
+        ctx.restore();
+      }
+    }
+
+    if (ev.state === 'warning') {
+      var pulse = 0.5 + 0.5 * Math.sin(clock * 8);
+      ctx.save();
+      ctx.fillStyle = 'rgba(10, 14, 28, 0.85)';
+      ctx.fillRect(W * 0.1, 75, W * 0.8, 44);
+      glow(ev.col, 16 * pulse + 8);
+      ctx.strokeStyle = ev.col;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(W * 0.1, 75, W * 0.8, 44);
+      text('⚠ ¡ALERTA: ' + ev.name.toUpperCase() + '! ⚠', W / 2, 95, 14, ev.col, 'center');
+      text('PREPÁRATE EN ' + Math.max(0, (ev.warnDur - ev.t)).toFixed(1) + ' s', W / 2, 110, 10.5, '#ffffff', 'center');
+      noGlow();
+      ctx.restore();
+    }
+  }
+
   // Minas espaciales
   function spawnSpaceMine(x, y) {
     spaceMines.push({
@@ -2547,6 +3063,27 @@
     explosionSound(s);
     var KO = owner || players[0], gain = Math.round(e.pts * comboMult(KO.combo)), big = e.kind === 'boss' || e.kind === 'miniboss';
     KO.score += gain;
+    var xpGain = e.kind === 'boss' ? 500 : (e.kind === 'miniboss' ? 180 : (e.kind === 'heavy' ? 45 : (e.kind === 'elite' ? 60 : 16)));
+    addXp(KO, xpGain);
+    if (KO && KO.alive && KO.perks && KO.perks.vampire) {
+      var vampChance = [0, 0.05, 0.09, 0.14][KO.perks.vampire] || 0.05;
+      if (Math.random() < vampChance && KO.lives < MAX_LIVES) {
+        KO.lives = Math.min(MAX_LIVES, KO.lives + 1);
+        floatTxt(KO.x, KO.y - 35, '+1 VIDA (VAMPIRISMO)', '#7dffa0', 18, { vx: 0, vy: -50, life: 1.2 });
+        powerSound();
+        sparksAt(KO.x, KO.y, 12, [120, 255, 160]);
+      }
+    }
+    if (KO && KO.alive && KO.perks && KO.perks.shieldSurge) {
+      KO.surgeKills = (KO.surgeKills || 0) + 1;
+      var targetSurge = [0, 28, 20, 14][KO.perks.shieldSurge] || 25;
+      if (KO.surgeKills >= targetSurge) {
+        KO.surgeKills = 0;
+        KO.shieldT = Math.max(KO.shieldT, 4.5);
+        floatTxt(KO.x, KO.y - 30, '¡ESCUDO RECARGADO!', '#4deeea', 19, { vx: 0, vy: -50, life: 1.3 });
+        powerSound();
+      }
+    }
     if (camp) camp.levelScore = (camp.levelScore || 0) + gain;
     recordKill(e.kind === 'boss' ? ('boss_' + (e.bid || 0)) : (e.kind === 'miniboss' ? ('mini_' + (e.mid || 0)) : e.kind));
     floatTxt(e.x, e.y - e.r * 0.2, '+' + gain, KO.combo >= 8 ? comboCol(comboMult(KO.combo)) : '#ffe27a', big ? 30 : Math.min(22, 14 + Math.sqrt(gain) * 0.4), { vx: 0, vy: big ? -40 : -70, life: big ? 1.8 : 0.9 });
@@ -2770,10 +3307,22 @@
     if (el === 1 && lv >= 3) { pShot(x - 10, y + 6, -0.32, P, { el: 1, sp: 480, r: 5, life: 0.3 }); pShot(x + 10, y + 6, 0.32, P, { el: 1, sp: 480, r: 5, life: 0.3 }); }
     if (el === 2 && lv >= 5) pShot(x, y, 0, P, { el: 2, sp: 420, r: 9, dmg: 2 });
     if (el === 5 && lv >= 6) { pShot(x - 16, y + 8, -0.9, P, o); pShot(x + 16, y + 8, 0.9, P, o); }
-    if (P.drones > 0) {
-      for (var di = 0; di < P.drones; di++) {
-        var dAng = clock * 3.2 + di * Math.PI;
+    var activeDrones = Math.max(P.drones || 0, (P.perks && P.perks.drone) || 0);
+    if (activeDrones > 0) {
+      for (var di = 0; di < activeDrones; di++) {
+        var dAng = clock * 3.2 + di * (TAU / activeDrones);
         pShot(P.x + Math.cos(dAng) * 34, P.y + Math.sin(dAng) * 34, 0, P, { el: el, sp: 840, r: 3.5, dmg: 1 });
+      }
+    }
+    if (P.perks && P.perks.micromissiles) {
+      P.shotCount = (P.shotCount || 0) + 1;
+      var mInterval = [0, 8, 6, 4][P.perks.micromissiles] || 6;
+      if (P.shotCount % mInterval === 0) {
+        var nMissiles = P.perks.micromissiles >= 3 ? 4 : (P.perks.micromissiles >= 2 ? 3 : 2);
+        for (var mci = 0; mci < nMissiles; mci++) {
+          var mAng = (mci - (nMissiles - 1) / 2) * 0.32;
+          pShot(P.x + (mci - (nMissiles - 1) / 2) * 12, P.y - 8, mAng, P, { el: 5, sp: 580, r: 4, dmg: 1.5, home: 3.5, life: 1.8 });
+        }
       }
     }
     pew();
@@ -2792,7 +3341,7 @@
     var S = shipOf(P);
     if (P.grazeT > 0) P.grazeT -= dt;
     var dx = Math.max(-1, Math.min(1, (K.right ? 1 : 0) - (K.left ? 1 : 0) + pd.x)), dy = Math.max(-1, Math.min(1, (K.down ? 1 : 0) - (K.up ? 1 : 0) + pd.y));
-    var axx = 0, ayy = 0, maxV = 560 * (S.spdMult || 1);
+    var axx = 0, ayy = 0, maxV = 560 * (S.spdMult || 1) * (1 + ((P.perks && P.perks.speed) || 0) * 0.18);
     if (dx) { axx = dx * 3200; if (one) mouseT = null; P.vx *= Math.pow(0.35, dt); }
     if (dy) { ayy = dy * 3000; if (one) mouseT = null; P.vy *= Math.pow(0.35, dt); }
     if (!dx && !dy && one && mouseT) {
@@ -2833,7 +3382,31 @@
         life: 0.25 + Math.random() * 0.2, size: 3.4 * k
       });
     }
-    if ((K.fire || pd.fire || (one && (mouseFire || touchMode))) && P.fireCd <= 0) { playerShoot(P); P.fireCd = EL[elOf(P)].cd * (P.rfT > 0 ? 0.53 : 1) * (P.abT > 0 && abOf(P) === 3 ? 0.45 : 1); }
+    if (P.perks && P.perks.frostAura) {
+      P.frostT = (P.frostT || 0) + dt;
+      if (P.frostT >= 0.35) {
+        P.frostT = 0;
+        var auraR = 140;
+        for (var fai = 0; fai < enemies.length; fai++) {
+          var fe = enemies[fai];
+          if (fe.y < 0) continue;
+          var fdx = fe.x - P.x, fdy = fe.y - P.y;
+          if (fdx * fdx + fdy * fdy < auraR * auraR) {
+            fe.frz = Math.max(fe.frz || 0, 1.2);
+            if (P.perks.frostAura >= 2) {
+              fe.hp -= 0.4; fe.hit = 0.05;
+              if (fe.hp <= 0) { killEnemy(fai, P); fai--; }
+            }
+          }
+        }
+        addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.25, maxR: auraR, col: [140, 230, 255] });
+      }
+    }
+    if ((K.fire || pd.fire || (one && (mouseFire || touchMode))) && P.fireCd <= 0) {
+      playerShoot(P);
+      var rapidMult = 1 / (1 + ((P.perks && P.perks.rapid) || 0) * 0.2);
+      P.fireCd = EL[elOf(P)].cd * (P.rfT > 0 ? 0.53 : 1) * (P.abT > 0 && abOf(P) === 3 ? 0.45 : 1) * rapidMult;
+    }
     if (K.ab) { K.ab = false; if (!useAbility(P) && P.abCd > 0) tone(150, 0.06, 'square', 0.025, 0); }
   }
 
@@ -2858,6 +3431,7 @@
     formationStep(edt, true);
     updateAsteroids(edt);
     updateSpaceMines(edt);
+    updateCosmicEvents(edt);
     if (bossTelegraph) {
       bossTelegraph.t -= dt;
       if (bossTelegraph.t <= 0) bossTelegraph = null;
@@ -2926,6 +3500,18 @@
         if (hb) { ha = Math.atan2(b.vy, b.vx); ht = Math.atan2(hb.y - b.y, hb.x - b.x); hdiff = Math.atan2(Math.sin(ht - ha), Math.cos(ht - ha)); ha += Math.max(-b.home * dt, Math.min(b.home * dt, hdiff)); b.vx = Math.cos(ha) * hs; b.vy = Math.sin(ha) * hs; }
       }
       b.x += b.vx * dt; b.y += b.vy * dt;
+      if (b.o && b.o.perks && b.o.perks.ricochet) {
+        var maxBounces = b.o.perks.ricochet;
+        if ((b.bounces || 0) < maxBounces) {
+          if (b.x < 12 && b.vx < 0) {
+            b.x = 12; b.vx = -b.vx; b.bounces = (b.bounces || 0) + 1;
+            sparksAt(b.x, b.y, 4, [0, 240, 255]); hitSound();
+          } else if (b.x > W - 12 && b.vx > 0) {
+            b.x = W - 12; b.vx = -b.vx; b.bounces = (b.bounces || 0) + 1;
+            sparksAt(b.x, b.y, 4, [0, 240, 255]); hitSound();
+          }
+        }
+      }
       if (b.y < -30 || b.y > H + 40 || b.x < -30 || b.x > W + 30) { pBullets.splice(i, 1); continue; }
       if (asteroids.length) {
         for (j = 0; j < asteroids.length; j++) {
@@ -2966,8 +3552,29 @@
           if (b.hl && b.hl.indexOf(e) >= 0) continue;
           var elMult = 1 + (up.el || 0) * 0.2;
           var dealt = +((b.dmg + (e.frz > 0 ? 1 : 0)) * elMult).toFixed(1);
+          var isCrit = false;
+          if (b.o && b.o.perks && b.o.perks.crit) {
+            var critChance = b.o.perks.crit * 0.15;
+            if (Math.random() < critChance) {
+              isCrit = true;
+              dealt = +(dealt * 2.5).toFixed(1);
+            }
+          }
           e.hp -= dealt; e.hit = 0.08; e.lastO = b.o;
-          dmgNum(e, dealt, 'rgb(' + EL[b.el].rgb + ')');
+          if (isCrit) {
+            dmgNum(e, dealt, '#ff0055');
+            floatTxt(e.x, e.y - e.r * 0.4, '¡CRÍTICO!', '#ff3366', 15, { vx: (Math.random() - 0.5) * 40, vy: -60, life: 0.6 });
+            sparksAt(b.x, b.y, 6, [255, 30, 90]);
+            tone(950, 0.05, 'sawtooth', 0.06, 0);
+          } else {
+            dmgNum(e, dealt, 'rgb(' + (EL[b.el] ? EL[b.el].rgb : '0,240,255') + ')');
+          }
+          if (b.o && b.o.perks && b.o.perks.chainSpark && b.el !== 3) {
+            var sparkChance = b.o.perks.chainSpark * 0.18;
+            if (Math.random() < sparkChance) {
+              chainZap(e, b.o.perks.chainSpark === 2 ? 3 : 2, b.o);
+            }
+          }
           if (b.el === 1) { e.dot = 2; e.dotR = 1.2 * elMult; e.dotC = '255,120,40'; }
           else if (b.el === 4) { e.dot = 4.5; e.dotR = b.dr * elMult; e.dotC = '110,255,90'; }
           else if (b.el === 2) e.frz = 2.5 + (up.el || 0) * 0.3;
@@ -3046,9 +3653,32 @@
           P.abCd = Math.max(0, P.abCd - 0.15);
           var gPts = 20 * comboMult(P.combo);
           P.score += gPts;
+          addXp(P, 8);
           sparksAt((P.x + b.x) * 0.5, (P.y + b.y) * 0.5, 4, [90, 240, 255]);
           floatTxt(P.x + (Math.random() - 0.5) * 20, P.y - 12, 'ROCE +' + gPts, '#40f0ff', 11, { vy: -45, life: 0.5 });
           tone(1350, 0.035, 'sine', 0.025, 0);
+          if (P.perks && P.perks.grazeNova) {
+            var novaR = P.perks.grazeNova === 2 ? 110 : 75;
+            var novaDmg = P.perks.grazeNova === 2 ? 3 : 1.5;
+            addP({ t: 'ring', x: P.x, y: P.y, vx: 0, vy: 0, life: 0.35, maxR: novaR, col: [255, 234, 0] });
+            for (var gbi = eBullets.length - 1; gbi >= 0; gbi--) {
+              var eb = eBullets[gbi];
+              var gdx = eb.x - P.x, gdy = eb.y - P.y;
+              if (gdx * gdx + gdy * gdy < novaR * novaR) {
+                sparksAt(eb.x, eb.y, 3, [255, 234, 0]);
+                eBullets.splice(gbi, 1);
+              }
+            }
+            for (var gei = 0; gei < enemies.length; gei++) {
+              var ene = enemies[gei];
+              var edx = ene.x - P.x, edy = ene.y - P.y;
+              if (edx * edx + edy * edy < (novaR + ene.r) * (novaR + ene.r)) {
+                ene.hp -= novaDmg; ene.hit = 0.08; ene.lastO = P;
+                dmgNum(ene, novaDmg, '#ffea00');
+                if (ene.hp <= 0) { killEnemy(gei, P); gei--; }
+              }
+            }
+          }
         }
       }
     }
@@ -3093,8 +3723,11 @@
     var gotAny = false;
     var hasActiveMag = false;
     for (q = 0; q < players.length; q++) if (players[q].alive && players[q].magT > 0) { hasActiveMag = true; break; }
-    var coinPullR = hasActiveMag ? 9999 : (120 + (up.mag || 0) * 80);
-    var coinPullF = hasActiveMag ? 2200 : (1200 + (up.mag || 0) * 350);
+    var maxMagPerk = 0;
+    for (q = 0; q < players.length; q++) if (players[q].alive && players[q].perks && players[q].perks.magnetMaster) maxMagPerk = Math.max(maxMagPerk, players[q].perks.magnetMaster);
+    var magMultiplier = 1 + maxMagPerk * 0.6;
+    var coinPullR = hasActiveMag ? 9999 : ((120 + (up.mag || 0) * 80) * magMultiplier);
+    var coinPullF = hasActiveMag ? 2200 : ((1200 + (up.mag || 0) * 350) * magMultiplier);
     for (i = coins.length - 1; i >= 0; i--) {
       var c = coins[i], np = nearestPlayer(c.x, c.y), got = null;
       c.vy = Math.min(190, c.vy + 260 * dt);
@@ -3111,11 +3744,11 @@
         ddx = P.x - c.x; ddy = P.y - c.y;
         if (ddx * ddx + ddy * ddy < 30 * 30) { got = P; break; }
       }
-      if (got) { var v = got.c2T > 0 ? 2 : 1; wallet += v; runCoins += v; gotAny = true; msnOnCoins(v); coinSound(); coins.splice(i, 1); }
+      if (got) { var v = got.c2T > 0 ? 2 : 1; wallet += v; runCoins += v; gotAny = true; msnOnCoins(v); addXp(got, 5 * v); coinSound(); coins.splice(i, 1); }
       else if (c.y > H + 20) coins.splice(i, 1);
     }
-    var gemPullR = hasActiveMag ? 9999 : (260 + (up.mag || 0) * 80);
-    var gemPullF = hasActiveMag ? 2200 : (1300 + (up.mag || 0) * 350);
+    var gemPullR = hasActiveMag ? 9999 : ((260 + (up.mag || 0) * 80) * magMultiplier);
+    var gemPullF = hasActiveMag ? 2200 : ((1300 + (up.mag || 0) * 350) * magMultiplier);
     for (i = gemDrops.length - 1; i >= 0; i--) {
       var g = gemDrops[i], ng = nearestPlayer(g.x, g.y), gg = null;
       g.vy = Math.min(95, g.vy + 140 * dt);
@@ -3133,7 +3766,7 @@
         ddx = P.x - g.x; ddy = P.y - g.y;
         if (ddx * ddx + ddy * ddy < 32 * 32) { gg = P; break; }
       }
-      if (gg) { gems++; runGems++; gotAny = true; msnOnGem(); gemSound(); sparksAt(g.x, g.y, 6, [140, 245, 255]); gemDrops.splice(i, 1); }
+      if (gg) { gems++; runGems++; gotAny = true; msnOnGem(); addXp(gg, 30); gemSound(); sparksAt(g.x, g.y, 6, [140, 245, 255]); gemDrops.splice(i, 1); }
       else if (g.y > H + 20) gemDrops.splice(i, 1);
     }
     if (gotAny) saveMeta();
@@ -3145,7 +3778,7 @@
         for (var cai = 0; cai < asteroids.length; cai++) sparksAt(asteroids[cai].x, asteroids[cai].y, 4, [160, 215, 255]);
         asteroids = [];
       }
-      curP.fin = (gameMode === 'camp' && (camp.boss || (camp.wave >= 10 && camp.lv % 5 !== 0))) || (gameMode === 'coop' && curP.boss);
+      curP.fin = (gameMode === 'camp' && camp && (camp.boss || (camp.wave >= 10 && camp.lv % 5 !== 0))) || (gameMode === 'coop' && curP.boss);
       if (curP.fin) { clearT = curP.boss ? 5.2 : 4.4; vacOn = true; vacAt = clock; }
       curP.clearDur = clearT;
       var bonus = 100 * level;
@@ -4858,8 +5491,119 @@
     ctx.restore();
   }
 
+  function drawPerkModal() {
+    if (!perkModal || !perkCards || perkCards.length === 0) return;
+    ctx.save();
+    ctx.fillStyle = 'rgba(6, 10, 24, 0.90)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.08)';
+    ctx.lineWidth = 1;
+    for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+    for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+
+    var pulse = 0.5 + 0.5 * Math.sin(clock * 5);
+    glow('#00f0ff', 16 * pulse + 8);
+    text('▲ ¡SUBIDA DE NIVEL! · ELIGE UNA MEJORA ▲', W / 2, 75, 24, '#00f0ff', 'center');
+    noGlow();
+    var pLv = perkPlayer ? perkPlayer.runLv : 2;
+    text('NIVEL DE NAVE ' + pLv + '  ·  [1, 2, 3] / HAZ CLIC O USA FLECHAS + ENTER', W / 2, 106, 13, '#9cb0d0', 'center');
+
+    var nCards = perkCards.length;
+    var cardGap = Math.max(8, Math.floor(W * 0.02));
+    var cardW = Math.floor((W - 24 - cardGap * (nCards - 1)) / nCards);
+    var cardH = Math.min(330, Math.floor(H * 0.46));
+    var totalW = nCards * cardW + (nCards - 1) * cardGap;
+    var startX = Math.floor((W - totalW) / 2);
+    var cardY = Math.floor(H * 0.22);
+    perkCardRects = [];
+
+    for (var ci = 0; ci < nCards; ci++) {
+      var card = perkCards[ci];
+      var def = card.def;
+      var cx = startX + ci * (cardW + cardGap);
+      var isHover = (mousePos && mousePos.x >= cx && mousePos.x <= cx + cardW && mousePos.y >= cardY && mousePos.y <= cardY + cardH);
+      var isSel = (perkSel === ci) || isHover;
+      perkCardRects.push({ x: cx, y: cardY, w: cardW, h: cardH, idx: ci });
+
+      var rarityCol = def.rarity === 'epic' ? '#ffd54a' : (def.rarity === 'rare' ? '#b347ff' : '#00f0ff');
+      var rarityName = def.rarity === 'epic' ? 'LEGENDARIA' : (def.rarity === 'rare' ? 'RARA' : 'COMÚN');
+
+      ctx.save();
+      ctx.fillStyle = isSel ? 'rgba(18, 26, 56, 0.95)' : 'rgba(12, 16, 36, 0.9)';
+      ctx.fillRect(cx, cardY, cardW, cardH);
+
+      glow(rarityCol, isSel ? 22 : 10);
+      ctx.strokeStyle = isSel ? '#ffffff' : rarityCol;
+      ctx.lineWidth = isSel ? 3 : 1.8;
+      ctx.strokeRect(cx, cardY, cardW, cardH);
+      noGlow();
+
+      ctx.fillStyle = rarityCol;
+      ctx.fillRect(cx + (cardW - 100) / 2, cardY + 16, 100, 20);
+      text(rarityName, cx + cardW / 2, cardY + 31, 10, '#0a0d1a', 'center');
+
+      text(def.icon, cx + cardW / 2, cardY + 95, 46, '#ffffff', 'center');
+
+      glow(def.col, 10);
+      text(def.name, cx + cardW / 2, cardY + 140, 16, def.col, 'center');
+      noGlow();
+
+      var starsStr = '';
+      for (var sIdx = 1; sIdx <= def.maxLv; sIdx++) {
+        starsStr += (sIdx <= card.nextLv ? '★' : '☆') + ' ';
+      }
+      text(starsStr.trim(), cx + cardW / 2, cardY + 165, 15, '#ffd54a', 'center');
+      text('NIVEL ' + card.nextLv + ' / ' + def.maxLv, cx + cardW / 2, cardY + 185, 11, '#8fa0c0', 'center');
+
+      var descText = def.desc(card.nextLv);
+      wrapText(descText, cx + cardW / 2, cardY + 225, cardW - 32, 17, 12, '#e8eeff', 'center');
+
+      var btnCol = isSel ? rarityCol : 'rgba(255,255,255,0.15)';
+      ctx.fillStyle = btnCol;
+      ctx.fillRect(cx + 25, cardY + cardH - 46, cardW - 50, 32);
+      text('[' + (ci + 1) + '] ELEGIR', cx + cardW / 2, cardY + cardH - 25, 13, isSel ? '#0a0d1a' : '#ffffff', 'center');
+
+      ctx.restore();
+    }
+
+    text('PULSA [1, 2, 3] EN TU TECLADO O HAZ CLIC CON EL RATÓN', W / 2, cardY + cardH + 45, 13, '#6e82a4', 'center');
+    ctx.restore();
+  }
+
   function drawHUD() {
     var P0 = players[0], i, w;
+    if (numPlayers === 1 && P0 && P0.alive) {
+      // Barra de XP y Nivel de Nave
+      var xpW = Math.min(220, Math.floor(W * 0.44)), xpH = 5, xpX = Math.floor((W - xpW) / 2), xpY = 18;
+      var curXp = P0.runXp || 0, nextXp = P0.runNextXp || 90;
+      var xpRatio = Math.min(1, Math.max(0, curXp / nextXp));
+      ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(xpX, xpY, xpW, xpH);
+      var xg = ctx.createLinearGradient(xpX, 0, xpX + xpW, 0);
+      xg.addColorStop(0, '#00f0ff'); xg.addColorStop(1, '#b347ff');
+      ctx.fillStyle = xg; ctx.fillRect(xpX, xpY, Math.floor(xpW * xpRatio), xpH);
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)'; ctx.lineWidth = 1; ctx.strokeRect(xpX, xpY, xpW, xpH);
+      text('NV ' + (P0.runLv || 1) + ' · XP ' + curXp + '/' + nextXp, W / 2, xpY - 4, 10, '#00f0ff', 'center');
+
+      // Badges de perks activos
+      if (P0.perks) {
+        var activePerkIds = Object.keys(P0.perks).filter(function (id) { return P0.perks[id] > 0; });
+        for (var pki = 0; pki < activePerkIds.length; pki++) {
+          var apkId = activePerkIds[pki];
+          var apkDef = PERK_DEFS.find(function (d) { return d.id === apkId; });
+          if (apkDef) {
+            var bx = 16 + (pki % 7) * 28;
+            var by = 136 + Math.floor(pki / 7) * 26;
+            ctx.fillStyle = 'rgba(10, 16, 32, 0.75)'; ctx.fillRect(bx, by, 25, 22);
+            ctx.strokeStyle = apkDef.col; ctx.lineWidth = 1; ctx.strokeRect(bx, by, 25, 22);
+            text(apkDef.icon, bx + 12, by + 14, 11, '#ffffff', 'center');
+            if (P0.perks[apkId] > 1) {
+              text(String(P0.perks[apkId]), bx + 22, by + 20, 8, '#ffd54a', 'right');
+            }
+          }
+        }
+      }
+    }
     if (numPlayers === 1) {
       glow('#00f5ff', 14);
       text(String(P0.score), W / 2, 56, 40, '#ffffff');
@@ -5549,7 +6293,7 @@
 
 
   // ---------- Pantalla de ayuda ----------
-  var helpTabs = ['JUGAR', 'MODOS', 'PODERES', 'HABILIDAD', 'ENEMIGOS', 'JEFES', 'BESTIARIO'];
+  var helpTabs = ['JUGAR', 'MODOS', 'PERKS', 'PODERES', 'HABILIDAD', 'ENEMIGOS', 'JEFES', 'BESTIARIO'];
   function wrapText(str, x, y, maxW, lh, size, color, align) {
     var words = str.split(' '), line = '', n = 0, i, test;
     ctx.font = 'bold ' + size + 'px "Segoe UI", Arial, sans-serif';
@@ -5689,7 +6433,29 @@
       text(helpTabs[i], tx + tw / 2, ty + 20, tw < 84 ? 11 : 13, helpTab === i ? '#ffffff' : '#8a8aa8');
       if (helpTab === i) { ctx.fillStyle = '#00f5ff'; ctx.fillRect(tx + 12, ty + 25, tw - 24, 2); }
     }
-    if (helpTab === 0) helpPlay(y0); else if (helpTab === 1) helpModes(y0, by - 12); else if (helpTab === 2) helpPowers(y0, by - 12); else if (helpTab === 3) helpAbilities(y0, by - 12); else if (helpTab === 4) helpEnemies(y0, by - 12); else if (helpTab === 5) helpBosses(y0, by - 12); else helpBestiary(y0, by - 12);
+      function helpPerks(y0, yEnd) {
+    text('SISTEMA ROGUELITE: Destruye enemigos para subir de nivel y desbloquear cartas', W / 2, y0 + 10, 11.5, '#00f0ff', 'center');
+    var colW = Math.floor((W - 36) / 2);
+    var nRows = 6;
+    var rowH = Math.min(48, Math.floor((yEnd - y0 - 32) / nRows));
+    for (var i = 0; i < PERK_DEFS.length; i++) {
+      var def = PERK_DEFS[i];
+      var col = i < 6 ? 0 : 1;
+      var row = i % 6;
+      var bx = 16 + col * (colW + 4);
+      var by = y0 + 26 + row * rowH;
+      ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(bx, by, colW, rowH - 3);
+      ctx.strokeStyle = def.col; ctx.lineWidth = 1; ctx.strokeRect(bx, by, colW, rowH - 3);
+      text(def.icon + ' ' + def.name, bx + 8, by + 16, 12, def.col, 'left');
+      var rarityTag = def.rarity === 'epic' ? '★ LEG' : (def.rarity === 'rare' ? '◆ RARA' : '● COMÚN');
+      text(rarityTag, bx + colW - 8, by + 16, 9.5, def.col, 'right');
+      var descSnippet = def.desc(1);
+      if (descSnippet.length > 36) descSnippet = descSnippet.slice(0, 34) + '...';
+      text(descSnippet, bx + 8, by + 30, 9.5, '#b0c0d8', 'left');
+    }
+  }
+
+    if (helpTab === 0) helpPlay(y0); else if (helpTab === 1) helpModes(y0, by - 12); else if (helpTab === 2) helpPerks(y0, by - 12); else if (helpTab === 3) helpPowers(y0, by - 12); else if (helpTab === 4) helpAbilities(y0, by - 12); else if (helpTab === 5) helpEnemies(y0, by - 12); else if (helpTab === 6) helpBosses(y0, by - 12); else helpBestiary(y0, by - 12);
     helpRects.push({ x: bx, y: by, w: 160, h: 36, back: true });
     ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(bx, by, 160, 36);
     text('VOLVER (ESC)', W / 2, by + 24, 15, '#ffffff');
@@ -5937,11 +6703,13 @@
       for (i = 0; i < powerups.length; i++) drawPower(powerups[i]);
       for (i = 0; i < coins.length; i++) drawCoin(coins[i]);
       for (i = 0; i < gemDrops.length; i++) drawGem(gemDrops[i]);
+      drawCosmicBackground();
       drawAsteroids();
       drawSpaceMines();
       drawBossTelegraph();
       for (i = 0; i < enemies.length; i++) { drawEnemy(enemies[i]); drawStatus(enemies[i]); }
       drawBullets();
+      drawCosmicForeground();
       if (state === 'playing' || state === 'paused') {
         for (var pi = 0; pi < players.length; pi++) {
           var P = players[pi];
@@ -5970,6 +6738,7 @@
       drawCronoTint();
       drawHUD();
     }
+    if (perkModal) drawPerkModal();
 
     ctx.drawImage(vigCanvas, 0, 0, W, H);
     drawCriticalVignette();
@@ -6054,6 +6823,30 @@
         ctx.strokeStyle = btnLabels[idx].c; ctx.lineWidth = 1.6; ctx.strokeRect(b.x, b.y, b.w, b.h);
         text(btnLabels[idx].t, W / 2, b.y + 23, 13.5, '#ffffff');
       });
+
+      var py = H * 0.22 + 285;
+      var pausedP = players[0];
+      var activePerks = pausedP && pausedP.perks ? Object.keys(pausedP.perks).filter(function (id) { return pausedP.perks[id] > 0; }) : [];
+      text('── MEJORAS DE ESTA PARTIDA (NV ' + (pausedP ? pausedP.runLv || 1 : 1) + ') ──', W / 2, py, 12, '#00f0ff', 'center');
+      if (activePerks.length === 0) {
+        text('Aún no has elegido mejoras en esta partida. ¡Sube de nivel destruyendo enemigos!', W / 2, py + 22, 11, '#7a8ba8', 'center');
+      } else {
+        var pColW = Math.min(220, (W - 32) / 2);
+        for (var pki = 0; pki < activePerks.length && pki < 6; pki++) {
+          var pkId = activePerks[pki];
+          var pkDef = PERK_DEFS.find(function (d) { return d.id === pkId; });
+          var pkLv = pausedP.perks[pkId];
+          if (pkDef) {
+            var colIdx = pki % 2;
+            var rowIdx = Math.floor(pki / 2);
+            var pkX = (W / 2) + (colIdx === 0 ? -pColW : 8);
+            var pkY = py + 16 + rowIdx * 22;
+            var stars = '';
+            for (var s = 0; s < pkLv; s++) stars += '★';
+            text(pkDef.icon + ' ' + pkDef.name + ' ' + stars, pkX, pkY + 11, 11, pkDef.col, 'left');
+          }
+        }
+      }
     } else if (state === 'over') {
       var ov = Math.max(0, Math.min(1, (now - overAt - 800) / 500));
       if (ov > 0) {
@@ -6249,6 +7042,26 @@
 
   window.addEventListener('keydown', function (e) {
     var k = e.key;
+    if (perkModal) {
+      if (k === '1') { choosePerk(0); e.preventDefault(); return; }
+      if (k === '2') { choosePerk(1); e.preventDefault(); return; }
+      if (k === '3') { choosePerk(2); e.preventDefault(); return; }
+      if (k === 'ArrowLeft' || k === 'a' || k === 'A') {
+        perkSel = (perkSel + perkCards.length - 1) % perkCards.length;
+        tone(400, 0.04, 'triangle', 0.04, 0);
+        e.preventDefault(); return;
+      }
+      if (k === 'ArrowRight' || k === 'd' || k === 'D') {
+        perkSel = (perkSel + 1) % perkCards.length;
+        tone(480, 0.04, 'triangle', 0.04, 0);
+        e.preventDefault(); return;
+      }
+      if (k === 'Enter' || k === ' ') {
+        choosePerk(perkSel);
+        e.preventDefault(); return;
+      }
+      e.preventDefault(); return;
+    }
     touchMode = false; tch = null;
     if (state === 'settings') {
       if (k === 'Escape' || k === 'Backspace') { closeSettings(); e.preventDefault(); return; }
@@ -6381,8 +7194,18 @@
   });
 
   // Clic o toque sobre la interfaz. Devuelve false si el toque es "de juego" (estado playing)
-  function pointer(cx, cy) {
-    var x = cx - ox, y = cy, i, o;
+  function pointer(cx, cy, isCanvas) {
+    var x = isCanvas ? cx : (cx - ox), y = cy, i, o;
+    if (perkModal) {
+      for (i = 0; i < perkCardRects.length; i++) {
+        var pcr = perkCardRects[i];
+        if (x >= pcr.x && x <= pcr.x + pcr.w && y >= pcr.y && y <= pcr.y + pcr.h) {
+          choosePerk(pcr.idx);
+          return true;
+        }
+      }
+      return true;
+    }
     if (x >= 0 && x < 60 && y < 60) { toggleMute(); return true; }
     if (state === 'settings') {
       return handleSettingsClick(x, y);
@@ -6603,6 +7426,7 @@
   window.addEventListener('mouseup', function () { mouseFire = false; });
   canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   canvas.addEventListener('mousemove', function (e) {
+    mousePos = { x: e.clientX - ox, y: e.clientY };
     var K = keyState[0], P = players[0];
     if (state === 'playing' && numPlayers === 1 && performance.now() - lastTouch > 800 && P && P.alive && !K.left && !K.right && !K.up && !K.down) {
       mouseT = {
@@ -6657,6 +7481,13 @@
       else if (ev.a) buy(shopSel, 0);
       else if (ev.x && tab === 1) buy(shopSel, 1);
       else if (ev.b || ev.start) closeShop();
+    } else if (perkModal) {
+      if (ev.l) { perkSel = (perkSel + perkCards.length - 1) % perkCards.length; tone(400, 0.04, 'triangle', 0.04, 0); }
+      else if (ev.r) { perkSel = (perkSel + 1) % perkCards.length; tone(480, 0.04, 'triangle', 0.04, 0); }
+      else if (ev.a || ev.start) { choosePerk(perkSel); }
+      else if (ev.x) { choosePerk(0); }
+      else if (ev.y && perkCards.length > 1) { choosePerk(1); }
+      else if (ev.b && perkCards.length > 2) { choosePerk(2); }
     } else if (state === 'help') {
       if (ev.l) helpTab = (helpTab + helpTabs.length - 1) % helpTabs.length; else if (ev.r) helpTab = (helpTab + 1) % helpTabs.length;
       else if (ev.a || ev.b || ev.start) closeHelp();
@@ -6806,6 +7637,13 @@
     _testHook.spawnSpaceMine = spawnSpaceMine;
     _testHook.explodeSpaceMine = explodeSpaceMine;
     _testHook.updateSpaceMines = updateSpaceMines;
+    _testHook.triggerCosmicEvent = triggerCosmicEvent;
+    _testHook.getCosmicEvent = function () { return cosmicEvent; };
+    _testHook.getMeteors = function () { return meteors; };
+    _testHook.COSMIC_EVENT_DEFS = COSMIC_EVENT_DEFS;
+    _testHook.updateCosmicEvents = updateCosmicEvents;
+    _testHook.drawCosmicBackground = drawCosmicBackground;
+    _testHook.drawCosmicForeground = drawCosmicForeground;
     _testHook.getBossTelegraph = function () { return bossTelegraph; };
     _testHook.setBossTelegraph = function (bt) { bossTelegraph = bt; };
     _testHook.exportSave = exportSave;
@@ -6814,6 +7652,18 @@
     _testHook.closeSettings = closeSettings;
     _testHook.drawSettings = drawSettings;
     _testHook.handleSettingsClick = handleSettingsClick;
+    _testHook.addXp = addXp;
+    _testHook.choosePerk = choosePerk;
+    _testHook.getPerkModal = function () { return { modal: perkModal, cards: perkCards, pending: pendingPerkChoices.length, sel: perkSel, rects: perkCardRects }; };
+    _testHook.PERK_DEFS = PERK_DEFS;
+    _testHook.queuePerkChoice = queuePerkChoice;
+    _testHook.openNextPerkModal = openNextPerkModal;
+    _testHook.drawPerkModal = drawPerkModal;
+    _testHook.drawHUD = drawHUD;
+    _testHook.openHelp = openHelp;
+    _testHook.closeHelp = closeHelp;
+    _testHook.updatePlayer = updatePlayer;
+    _testHook.reset = reset;
   }
 
   // ---------- Bucle ----------
@@ -6827,7 +7677,7 @@
     // Cámara lenta (jefe derrotado): el mundo usa un dt escalado, la interfaz el real
     var rdt = dt;
     if (slowmoT > 0 && state !== 'paused') { dt = rdt * timeScale(); slowmoT -= rdt; }
-    if (state === 'playing') update(dt);
+    if (state === 'playing' && !perkModal) update(dt);
 
     var wdt = (state === 'over' && now - overAt < 900) ? dt * 0.3 : dt;
     if (state !== 'paused') {
